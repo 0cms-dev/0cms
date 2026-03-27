@@ -23,6 +23,12 @@ class ZeroConfigCMS {
           localStorage.removeItem(this.storageKey);
           location.reload();
         }
+        if (e.data.type === 'CMS_REVERT' && e.data.selector) {
+          delete this.changes[e.data.selector];
+          localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
+          // Re-apply all remaining saved changes from a clean state
+          location.reload();
+        }
       });
       // Initial notification of existing changes
       this.notifyParent();

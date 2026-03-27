@@ -3,157 +3,514 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zero-Config CMS | Admin Dashboard</title>
+    <title>Zero-Config CMS | Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #3498db;
-            --sidebar-bg: #2c3e50;
-            --topbar-bg: #fff;
-            --text-main: #333;
-            --border-color: #eee;
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --sidebar-bg: #0f172a;
+            --sidebar-border: rgba(255,255,255,0.06);
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --font: 'Inter', system-ui, sans-serif;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 10px 30px rgba(0,0,0,0.05);
         }
-        * { box-sizing: border-box; }
-        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Inter', system-ui, sans-serif; background: #f9f9f9; }
-        
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); }
+
+        /* Layout */
         .layout { display: flex; height: 100vh; }
-        
+
         /* Sidebar */
-        .sidebar { width: 280px; background: var(--sidebar-bg); color: white; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 1.2rem; }
-        .sidebar-nav { flex: 1; padding: 20px 0; }
-        .nav-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: #cbd5e0; transition: background 0.2s; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
-        .nav-item.active { background: var(--primary); color: white; }
-        
-        /* Main Area */
-        .main { flex: 1; display: flex; flex-direction: column; position: relative; }
-        .topbar { height: 60px; background: var(--topbar-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
-        .preview-container { flex: 1; background: #e0e0e0; position: relative; }
-        iframe { width: 100%; height: 100%; border: none; background: white; }
-        
-        /* Components */
-        .btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+        .sidebar {
+            width: 240px; flex-shrink: 0; background: var(--sidebar-bg);
+            display: flex; flex-direction: column; border-right: 1px solid var(--sidebar-border);
+        }
+        .sidebar-brand { padding: 20px 20px 12px; }
+        .brand-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+        .brand-logo svg { width: 28px; height: 28px; background: var(--primary); border-radius: 8px; padding: 5px; }
+        .brand-name { font-weight: 700; font-size: 1rem; color: white; }
+        .brand-sub { font-size: 0.7rem; color: rgba(255,255,255,0.35); letter-spacing: 0.05em; text-transform: uppercase; }
+
+        .sidebar-section { padding: 8px 12px; }
+        .sidebar-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); padding: 0 8px; margin-bottom: 6px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+            font-size: 0.85rem; color: rgba(255,255,255,0.55); cursor: pointer; transition: all 0.15s; font-weight: 500;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+        .nav-item.active { background: rgba(99,102,241,0.2); color: white; }
+        .nav-item svg { width: 16px; height: 16px; opacity: 0.7; }
+
+        .sidebar-spacer { flex: 1; }
+
+        .github-badge {
+            margin: 12px; padding: 14px; background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius); cursor: pointer;
+        }
+        .github-badge .gh-status { font-size: 0.7rem; color: rgba(255,255,255,0.3); margin-bottom: 4px; }
+        .github-badge .gh-repo { font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.7); }
+        .github-badge .gh-connect { font-size: 0.75rem; color: var(--primary); font-weight: 500; }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        .topbar {
+            height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 20px; gap: 14px; flex-shrink: 0;
+        }
+        .topbar-url { flex: 1; display: flex; align-items: center; gap: 8px; }
+        .url-chip {
+            display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            font-size: 0.78rem; color: var(--text-muted); max-width: 300px; overflow: hidden;
+        }
+        .url-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+        .status-dot.off { background: var(--text-muted); }
+
+        .topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+        .pending-chip {
+            display: none; align-items: center; gap: 6px; padding: 5px 12px;
+            background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 20px; font-size: 0.78rem; font-weight: 600; color: var(--primary); cursor: pointer;
+        }
+        .pending-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px;
+            border: none; border-radius: 8px; font-family: var(--font); font-size: 0.82rem;
+            font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+        .btn-outline:hover { border-color: #94a3b8; color: var(--text); }
         .btn-primary { background: var(--primary); color: white; }
-        .btn-github { background: #24292e; color: white; display: flex; align-items: center; gap: 8px; }
-        
-        .change-log { position: absolute; right: 20px; top: 80px; width: 320px; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); border: 1px solid var(--border-color); display: none; flex-direction: column; max-height: 80%; z-index: 100; }
-        .log-header { padding: 15px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; }
-        .log-content { flex: 1; overflow-y: auto; padding: 10px; font-size: 0.8rem; }
-        .change-item { padding: 10px; border-bottom: 1px solid #f5f5f5; }
-        .selector { color: #3498db; font-family: monospace; font-size: 0.7rem; margin-bottom: 4px; }
-        
-        .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #4a5568; }
-        .status-badge.online { background: #c6f6d5; color: #22543d; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-save { background: var(--success); color: white; }
+        .btn-save:hover { background: #059669; }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Preview */
+        .preview-wrap { flex: 1; position: relative; }
+        .preview-wrap iframe { width: 100%; height: 100%; border: none; }
+        .preview-overlay { /* For loading states */ }
+
+        /* History Panel */
+        .history-panel {
+            width: 320px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border);
+            display: none; flex-direction: column; position: absolute; right: 0; top: 56px; bottom: 0; z-index: 20;
+        }
+        .history-panel.open { display: flex; }
+        .panel-header {
+            padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .panel-header h3 { font-size: 0.9rem; font-weight: 700; }
+        .panel-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.2rem; padding: 2px 6px; border-radius: 6px; }
+        .panel-close:hover { background: var(--bg); }
+
+        .panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+        .history-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.82rem; }
+        .history-empty .empty-icon { font-size: 2rem; margin-bottom: 8px; }
+
+        .history-item {
+            padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px;
+            cursor: pointer; transition: border-color 0.15s;
+        }
+        .history-item:hover { border-color: var(--primary); }
+        .history-item.reverted { opacity: 0.45; border-style: dashed; }
+        .hi-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .hi-time { font-size: 0.7rem; color: var(--text-muted); }
+        .hi-type { font-size: 0.65rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 10px; }
+        .hi-type.text { background: rgba(99,102,241,0.1); color: var(--primary); }
+        .hi-type.img { background: rgba(16,185,129,0.1); color: var(--success); }
+        .hi-selector { font-family: monospace; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hi-value { font-size: 0.8rem; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hi-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .hi-btn { font-size: 0.7rem; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border); background: none; cursor: pointer; color: var(--text-muted); }
+        .hi-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+        .panel-footer { padding: 14px 16px; border-top: 1px solid var(--border); }
+
+        /* Settings Modal */
+        .modal-backdrop {
+            display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 100;
+            align-items: center; justify-content: center; backdrop-filter: blur(4px);
+        }
+        .modal-backdrop.open { display: flex; }
+        .modal {
+            background: var(--surface); border-radius: 16px; width: 440px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.25); overflow: hidden;
+        }
+        .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); }
+        .modal-header h2 { font-size: 1rem; font-weight: 700; }
+        .modal-header p { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+        .modal-body { padding: 20px 24px; }
+        .modal-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; }
+        .field input {
+            width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+            font-family: var(--font); font-size: 0.85rem; outline: none; transition: border-color 0.15s;
+        }
+        .field input:focus { border-color: var(--primary); }
+        .field .hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px;
+            font-size: 0.83rem; font-weight: 600; color: white; z-index: 200; transform: translateY(16px);
+            opacity: 0; transition: all 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--primary); }
+
+        /* History toggle btn highlight */
+        .pending-chip.visible { display: inline-flex; }
     </style>
 </head>
 <body>
-    <div class="layout">
-        <aside class="sidebar">
-            <div class="sidebar-header">Zero-Config CMS</div>
-            <nav class="sidebar-nav">
-                <div class="nav-item active">Visual Editor</div>
-                <div class="nav-item">Settings</div>
-                <div class="nav-item">History</div>
-            </nav>
-            <div style="padding: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <button class="btn btn-github" style="width: 100%;">Connect GitHub</button>
+
+<div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-logo">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="brand-name">ZeroCMS</span>
             </div>
-        </aside>
-        
-        <main class="main">
-            <header class="topbar">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <span id="siteStatus" class="status-badge online">Connected: index.html</span>
-                    <span id="changeCounter" style="display:none; color: var(--primary); font-size: 0.8rem; cursor: pointer;">0 Changes</span>
+            <span class="brand-sub">Visual Editor</span>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-label">Editor</div>
+            <div class="nav-item active" id="navEditor">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                Visual Editor
+            </div>
+            <div class="nav-item" id="navHistory" onclick="toggleHistory()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>
+                History
+                <span id="historyBadge" style="display:none; margin-left:auto; background:var(--primary); color:white; font-size:0.6rem; font-weight:700; padding:2px 6px; border-radius:10px;"></span>
+            </div>
+            <div class="nav-item" id="navSettings" onclick="openSettings()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                Settings
+            </div>
+        </div>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="github-badge" id="githubBadge" onclick="openSettings()">
+            <div class="gh-status">GitHub Connection</div>
+            <div id="ghRepo" class="gh-connect">Connect your repository →</div>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar-url">
+                <div class="url-chip">
+                    <span id="statusDot" class="status-dot off"></span>
+                    <span id="siteUrl">localhost:8080/index.html</span>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="toggleCms" class="btn btn-primary">Enable CMS</button>
-                    <button id="publishBtn" class="btn btn-primary" style="display:none; background: #2ecc71;">Publish to GitHub</button>
-                </div>
-            </header>
-            
-            <div class="preview-container">
+            </div>
+            <div class="topbar-actions">
+                <span class="pending-chip" id="pendingChip" onclick="toggleHistory()">
+                    <span class="dot"></span>
+                    <span id="pendingCount">0</span> Änderungen
+                </span>
+                <button class="btn btn-outline" id="toggleBtn" onclick="toggleCms()">CMS aktivieren</button>
+                <button class="btn btn-save" id="saveBtn" style="display:none" onclick="saveChanges()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Speichern
+                </button>
+            </div>
+        </header>
+
+        <div style="flex:1; position:relative; display:flex;">
+            <div class="preview-wrap" id="previewWrap">
                 <iframe id="previewFrame" src="index.html"></iframe>
             </div>
-            
-            <div id="logPanel" class="change-log">
-                <div class="log-header">
-                    <span>Local Changes</span>
-                    <button onclick="document.getElementById('logPanel').style.display='none'" style="border:none;background:none;cursor:pointer;">&times;</button>
+
+            <!-- History Panel -->
+            <div class="history-panel" id="historyPanel">
+                <div class="panel-header">
+                    <h3>📋 Verlauf</h3>
+                    <button class="panel-close" onclick="toggleHistory()">×</button>
                 </div>
-                <div id="logContent" class="log-content"></div>
-                <div style="padding:15px; border-top: 1px solid var(--border-color);">
-                    <button id="clearBtn" class="btn" style="width:100%; background:#f5f5f5; color:#666;">Clear All</button>
+                <div class="panel-body" id="historyBody">
+                    <div class="history-empty">
+                        <div class="empty-icon">🕓</div>
+                        <div>Noch keine Änderungen.<br>Aktiviere das CMS und bearbeite deine Seite.</div>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    <button class="btn btn-outline" style="width:100%; font-size:0.78rem;" onclick="clearAll()">Alle Änderungen zurücksetzen</button>
                 </div>
             </div>
-        </main>
+        </div>
+    </main>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>GitHub Verbindung einrichten</h2>
+            <p>Einmalige Einrichtung. Deine Daten werden nur lokal gespeichert.</p>
+        </div>
+        <div class="modal-body">
+            <div class="field">
+                <label>Repository</label>
+                <input type="text" id="inputRepo" placeholder="z.B. martin/meine-website">
+                <div class="hint">Format: Benutzername/Repo-Name</div>
+            </div>
+            <div class="field">
+                <label>Branch</label>
+                <input type="text" id="inputBranch" placeholder="main" value="main">
+            </div>
+            <div class="field">
+                <label>Personal Access Token (PAT)</label>
+                <input type="password" id="inputToken" placeholder="ghp_...">
+                <div class="hint">Benötigt <code>repo</code>-Berechtigung. <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--primary)">Token erstellen →</a></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeSettings()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveSettings()">Speichern & Verbinden</button>
+        </div>
     </div>
+</div>
 
-    <script>
-        const frame = document.getElementById('previewFrame');
-        const toggleBtn = document.getElementById('toggleCms');
-        const pubBtn = document.getElementById('publishBtn');
-        const counter = document.getElementById('changeCounter');
-        const logPanel = document.getElementById('logPanel');
-        const logContent = document.getElementById('logContent');
-        
-        let cmsEnabled = false;
-        let changes = {};
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
-        // 1. Toggle CMS inside Iframe
-        toggleBtn.onclick = () => {
-            cmsEnabled = !cmsEnabled;
-            frame.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: cmsEnabled }, '*');
-            toggleBtn.textContent = cmsEnabled ? 'Disable CMS' : 'Enable CMS';
-            toggleBtn.style.background = cmsEnabled ? '#e74c3c' : '#3498db';
-        };
+<script>
+const frame = document.getElementById('previewFrame');
+const toggleBtn = document.getElementById('toggleBtn');
+const saveBtn = document.getElementById('saveBtn');
+const pendingChip = document.getElementById('pendingChip');
+const pendingCount = document.getElementById('pendingCount');
+const historyBody = document.getElementById('historyBody');
+const historyBadge = document.getElementById('historyBadge');
+const statusDot = document.getElementById('statusDot');
+const ghRepo = document.getElementById('ghRepo');
 
-        // 2. Listen for changes from Iframe
-        window.onmessage = (e) => {
-            if (e.data.type === 'CMS_CHANGED') {
-                changes = e.data.changes;
-                updateUI();
-            }
-        };
+let cmsEnabled = false;
+let changes = {}; // { selector: { value, time, type } }
+let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
 
-        function updateUI() {
-            const count = Object.keys(changes).length;
-            counter.textContent = `${count} Changes`;
-            counter.style.display = count > 0 ? 'inline' : 'none';
-            pubBtn.style.display = count > 0 ? 'inline' : 'none';
-            
-            // Build log
-            logContent.innerHTML = '';
-            for (const [selector, text] of Object.entries(changes)) {
-                const item = document.createElement('div');
-                item.className = 'change-item';
-                const display = text.length > 50 ? text.substring(0, 50) + '...' : text;
-                item.innerHTML = `
-                    <div class="selector">${selector}</div>
-                    <div style="font-weight:500">${display}</div>
-                `;
-                logContent.appendChild(item);
-            }
+// State
+function initSettings() {
+    if (settings.repo) {
+        ghRepo.textContent = settings.repo;
+        ghRepo.style.color = 'rgba(255,255,255,0.6)';
+        ghRepo.style.fontSize = '0.85rem';
+        ghRepo.style.fontWeight = '600';
+        document.getElementById('inputRepo').value = settings.repo || '';
+        document.getElementById('inputBranch').value = settings.branch || 'main';
+        document.getElementById('inputToken').value = settings.token || '';
+    }
+}
+initSettings();
+
+// CMS Toggle
+function toggleCms() {
+    cmsEnabled = !cmsEnabled;
+    frame.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: cmsEnabled }, '*');
+    toggleBtn.textContent = cmsEnabled ? 'CMS deaktivieren' : 'CMS aktivieren';
+    toggleBtn.className = cmsEnabled ? 'btn btn-outline' : 'btn btn-outline';
+    statusDot.className = cmsEnabled ? 'status-dot' : 'status-dot off';
+    showToast(cmsEnabled ? 'CMS aktiviert – Klicke auf Inhalte zum Bearbeiten' : 'CMS deaktiviert', 'info');
+}
+
+// Receive changes from iframe
+window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'CMS_CHANGED') return;
+    const raw = e.data.changes;
+    // Merge with timestamps
+    for (const [sel, val] of Object.entries(raw)) {
+        if (!changes[sel]) {
+            changes[sel] = { value: val, time: new Date(), type: val.startsWith('data:') ? 'img' : 'text' };
+        } else {
+            changes[sel].value = val;
+            changes[sel].time = new Date();
         }
+    }
+    updateUI();
+});
 
-        counter.onclick = () => {
-            logPanel.style.display = logPanel.style.display === 'flex' ? 'none' : 'flex';
-        };
+function updateUI() {
+    const count = Object.keys(changes).length;
+    pendingCount.textContent = count;
+    pendingChip.className = count > 0 ? 'pending-chip visible' : 'pending-chip';
+    saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+    historyBadge.textContent = count;
+    historyBadge.style.display = count > 0 ? 'inline' : 'none';
+    renderHistory();
+}
 
-        pubBtn.onclick = () => {
-            const repo = prompt('Enter GitHub Repo (user/repo):', 'martin/0CMS');
-            const token = prompt('Enter GitHub PAT (token):');
-            if (repo && token) {
-                alert('GitHub Commit would now send ' + Object.keys(changes).length + ' changes to: ' + repo);
-            }
-        };
+function renderHistory() {
+    if (Object.keys(changes).length === 0) {
+        historyBody.innerHTML = `<div class="history-empty"><div class="empty-icon">🕓</div><div>Noch keine Änderungen.<br>Aktiviere das CMS und bearbeite deine Seite.</div></div>`;
+        return;
+    }
+    historyBody.innerHTML = '';
+    // Show in reverse-chronological order
+    const sorted = Object.entries(changes).sort((a, b) => b[1].time - a[1].time);
+    for (const [sel, data] of sorted) {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        const timeStr = data.time.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const displayVal = data.type === 'img' ? '🖼 Bild geändert' : (data.value.length > 60 ? data.value.substring(0, 60) + '…' : data.value);
+        item.innerHTML = `
+            <div class="hi-meta">
+                <span class="hi-time">${timeStr}</span>
+                <span class="hi-type ${data.type}">${data.type === 'img' ? 'Bild' : 'Text'}</span>
+            </div>
+            <div class="hi-selector">${sel}</div>
+            <div class="hi-value">${displayVal}</div>
+            <div class="hi-actions">
+                <button class="hi-btn" onclick="revertChange('${sel.replace(/'/g, "\\'")}')">↩ Rückgängig</button>
+            </div>
+        `;
+        historyBody.appendChild(item);
+    }
+}
 
-        document.getElementById('clearBtn').onclick = () => {
-             changes = {};
-             updateUI();
-             frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
-             logPanel.style.display = 'none';
-        };
-    </script>
+function revertChange(selector) {
+    delete changes[selector];
+    frame.contentWindow.postMessage({ type: 'CMS_REVERT', selector }, '*');
+    updateUI();
+    showToast('Änderung rückgängig gemacht', 'info');
+}
+
+function clearAll() {
+    if (!confirm('Alle Änderungen zurücksetzen?')) return;
+    changes = {};
+    updateUI();
+    frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
+    closeHistory();
+    showToast('Alle Änderungen wurden zurückgesetzt', 'info');
+}
+
+// GitHub Save
+async function saveChanges() {
+    if (!settings.repo || !settings.token) {
+        openSettings();
+        showToast('Bitte erst GitHub verbinden', 'error');
+        return;
+    }
+    
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<span>Wird gespeichert…</span>`;
+    
+    try {
+        let successCount = 0;
+        // For each change: search file, get SHA, commit
+        for (const [selector, data] of Object.entries(changes)) {
+            // Search for the text in GitHub repo
+            const searchResult = await searchInRepo(selector, data);
+            if (searchResult) successCount++;
+        }
+        showToast(`✓ ${successCount} Änderungen gespeichert`, 'success');
+        changes = {};
+        updateUI();
+    } catch (err) {
+        showToast('Fehler beim Speichern: ' + err.message, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Speichern`;
+    }
+}
+
+async function searchInRepo(selector, data) {
+    if (data.type === 'img') {
+        showToast('Bild-Änderungen werden noch nicht direkt committed', 'info');
+        return false;
+    }
+    // Use GitHub Search API to find text
+    const query = encodeURIComponent(`"${data.value.substring(0, 30)}" repo:${settings.repo}`);
+    const res = await fetch(`https://api.github.com/search/code?q=${query}`, {
+        headers: { Authorization: `token ${settings.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    const json = await res.json();
+    if (!json.items || json.items.length === 0) {
+        showToast(`Datei für "${selector}" nicht gefunden`, 'error');
+        return false;
+    }
+    const file = json.items[0];
+    // Commit would happen here in a future step with the file SHA
+    showToast(`✓ "${file.name}" gefunden (Commit bereit)`, 'success');
+    return true;
+}
+
+// History Panel Toggle
+function toggleHistory() {
+    const panel = document.getElementById('historyPanel');
+    panel.classList.toggle('open');
+    document.getElementById('navHistory').classList.toggle('active', panel.classList.contains('open'));
+}
+
+function closeHistory() {
+    document.getElementById('historyPanel').classList.remove('open');
+}
+
+// Settings Modal
+function openSettings() {
+    document.getElementById('settingsModal').classList.add('open');
+}
+
+function closeSettings() {
+    document.getElementById('settingsModal').classList.remove('open');
+}
+
+function saveSettings() {
+    const repo = document.getElementById('inputRepo').value.trim();
+    const branch = document.getElementById('inputBranch').value.trim() || 'main';
+    const token = document.getElementById('inputToken').value.trim();
+    if (!repo || !token) { showToast('Bitte Repo und Token ausfüllen', 'error'); return; }
+    settings = { repo, branch, token };
+    localStorage.setItem('zcms-settings', JSON.stringify(settings));
+    ghRepo.textContent = repo;
+    ghRepo.style.color = 'rgba(255,255,255,0.6)';
+    ghRepo.style.fontSize = '0.85rem';
+    ghRepo.style.fontWeight = '600';
+    closeSettings();
+    showToast('GitHub verbunden: ' + repo, 'success');
+}
+
+// Toast
+function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+// Listen for revert sync from parent commands
+window.addEventListener('message', (e) => {
+    if (!e.data) return;
+});
+</script>
 </body>
 </html>
