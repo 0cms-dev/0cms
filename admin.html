@@ -24,6 +24,14 @@
             --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 10px 30px rgba(0,0,0,0.05);
         }
 
+        /* Support check banner */
+        #envWarning { 
+            position: fixed; top: 0; left: 0; right: 0; 
+            background: #ef4444; color: white; padding: 10px; 
+            text-align: center; font-size: 0.8rem; z-index: 9999; 
+            display: none; font-weight: 600;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); overflow: hidden; }
 
@@ -111,6 +119,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>
                 History
             </div>
+            <div class="nav-item" id="navSettings" onclick="toggleSettings()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Settings
+            </div>
             <div class="nav-item" onclick="resetOnboarding()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
                 Disconnect
@@ -136,10 +148,30 @@
             </div>
         </header>
 
-        <div style="flex:1; position:relative;">
-            <iframe id="previewFrame" src="index.html" style="width:100%; height:100%; border:none;"></iframe>
+        <div style="flex:1; position:relative; display: flex; flex-direction: column;">
+            <iframe id="previewFrame" src="about:blank" style="flex:1; width:100%; border:none;"></iframe>
             
-            <!-- Onboarding Overlay: Step 1 (Login) -->
+            <!-- Debug Console -->
+            <div id="debugConsole" style="height: 150px; background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 11px; padding: 10px; overflow-y: auto; border-top: 2px solid var(--border); display: none;">
+                <div style="color: #6a9955; margin-bottom: 5px;">// WebContainer Operation Logs</div>
+            </div>
+            
+        <!-- Settings Panel -->
+        <div class="history-panel" id="settingsPanel" style="z-index: 21;">
+            <div style="padding: 16px; border-bottom: 1px solid var(--border); font-weight: 700;">Settings</div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 8px;">Manual Dev Command</label>
+                    <input type="text" id="manualCommandInput" placeholder="e.g. npm run server" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.8rem;">
+                    <small style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; display: block;">Leave empty for auto-detection.</small>
+                </div>
+                <button class="btn btn-primary" style="width: 100%;" onclick="saveSettings()">Save Settings</button>
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
+                <div style="font-size: 0.7rem; font-weight: 700; color: #e67e22; text-transform: uppercase;">Advanced: Auto-Cleanup</div>
+                <button class="btn" style="width: 100%; background: #e67e22; color: white;" onclick="rollbackLastCommit()">Rollback Last Commit</button>
+                <button class="btn btn-outline" style="width: 100%; margin-top:8px; border-color:#e74c3c; color:#e74c3c" onclick="clearAll()">Reset All Edits</button>
+            </div>
+        </div>
             <div id="stepLogin" class="onboarding-screen">
                 <div class="onboarding-card">
                     <div style="font-size: 3rem; margin-bottom: 20px;">🐙</div>
@@ -181,7 +213,9 @@
 
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
+    import { WebContainerGitService } from './WebContainerGitService.js';
+
     const steps = {
         login: document.getElementById('stepLogin'),
         picker: document.getElementById('stepPicker')
@@ -193,56 +227,67 @@
     
     let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
     let changes = {};
+    let entries = []; // Track full entry metadata
     let cmsActive = false;
+    let cmsService = null;
+    let syncTimeout = null;
+    let lastSynced = {}; // Track what we've already written to GC
 
-    // Check if already connected
     function init() {
+        // Essential check for WebContainer/SharedArrayBuffer support
+        if (!window.crossOriginIsolated && window.location.protocol !== 'file:') {
+            document.getElementById('envWarning').style.display = 'block';
+            console.error('Environment is not cross-origin isolated. Check serve.js headers.');
+        }
+
+        // Check for token in URL (from OAuth redirect)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+            settings.token = urlToken;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         if (settings.repo && settings.token) {
             steps.login.classList.add('hidden');
             steps.picker.classList.add('hidden');
             activeRepoDisplay.textContent = `📍 ${settings.repo}`;
+            startCmsEngine(settings.repo, settings.token);
+        } else if (settings.token) {
+            // Token exists but no repo, show picker
+            steps.login.classList.add('hidden');
+            steps.picker.classList.remove('hidden');
+            fetchRepos();
         }
     }
     init();
 
-    // Step 1: Simulate GitHub Login
-    function simulateLogin() {
-        // In a real app, this would be window.location = 'github-oauth-url'
-        const token = prompt('Bitte gib einen GitHub Token (PAT) ein, um die Repo-Vorschau zu simulieren:', '');
-        if (!token) return;
-        
-        settings.token = token;
-        localStorage.setItem('zcms-settings', JSON.stringify(settings));
-        
-        steps.login.classList.add('hidden');
-        steps.picker.classList.remove('hidden');
-        fetchRepos();
-    }
+    window.simulateLogin = function() {
+        // Redirect to local OAuth proxy
+        window.location.href = '/github/login';
+    };
 
-    // Step 2: Fetch and Pick Repo
     async function fetchRepos() {
         repoLoader.classList.remove('hidden');
         repoList.innerHTML = '';
-        
         try {
-            const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=10', {
+            // Increased per_page to 100 and added visibility=all to see private repos
+            const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
                 headers: { Authorization: `token ${settings.token}` }
             });
             const repos = await res.json();
-            
-            if (repos.message === 'Bad credentials') throw new Error('Ungültiger Token');
-
+            if (repos.message === 'Bad credentials') throw new Error('Invalid Token');
+            if (repos.length === 0) {
+                repoList.innerHTML = '<div style="padding:20px; text-align:center; color:#666">No repositories found. Make sure the App is installed on your account.</div>';
+                return;
+            }
             repos.forEach(repo => {
                 const item = document.createElement('div');
                 item.className = 'repo-item';
                 item.onclick = () => selectRepo(repo.full_name);
-                item.innerHTML = `
-                    <div>
-                        <div class="repo-name">${repo.full_name}</div>
-                        <div class="repo-meta">Zuletzt aktualisiert: ${new Date(repo.updated_at).toLocaleDateString()}</div>
-                    </div>
-                    <div style="font-size: 1.2rem;">→</div>
-                `;
+                item.innerHTML = `<div><div class="repo-name">${repo.full_name}</div><div class="repo-meta">Last update: ${new Date(repo.updated_at).toLocaleDateString()}</div></div><div style="font-size: 1.2rem;">→</div>`;
                 repoList.appendChild(item);
             });
         } catch (err) {
@@ -253,42 +298,99 @@
         }
     }
 
-    function selectRepo(full_name) {
+    window.selectRepo = function(full_name) {
         settings.repo = full_name;
         localStorage.setItem('zcms-settings', JSON.stringify(settings));
         steps.picker.classList.add('hidden');
         activeRepoDisplay.textContent = `📍 ${full_name}`;
-        showToast('Erfolgreich verbunden!', 'success');
+        startCmsEngine(full_name, settings.token);
+    };
+
+    async function startCmsEngine(repo, token) {
+        lastSynced = {}; // Reset sync cache
+        const consoleEl = document.getElementById('debugConsole');
+        consoleEl.style.display = 'block';
+        consoleEl.innerHTML = '<div style="color: #6a9955; margin-bottom: 5px;">// Starting WebContainer Environment...</div>';
+
+        cmsService = new WebContainerGitService({
+            repoUrl: `https://github.com/${repo}.git`,
+            token: token,
+            onStatusChange: (msg) => {
+                showToast(msg, 'info');
+                const log = document.createElement('div');
+                log.style.color = '#569cd6';
+                log.textContent = `> ${msg}`;
+                consoleEl.appendChild(log);
+                consoleEl.scrollTop = consoleEl.scrollHeight;
+            },
+            onLog: (msg) => {
+                const log = document.createElement('div');
+                log.textContent = msg;
+                consoleEl.appendChild(log);
+                consoleEl.scrollTop = consoleEl.scrollHeight;
+            },
+            onServerReady: (url) => {
+                frame.src = url;
+                document.getElementById('siteUrl').textContent = url;
+                showToast('Website ready!', 'success');
+            }
+        });
+        
+        const manualCmd = localStorage.getItem('zcms-manual-command') || null;
+        await cmsService.boot(manualCmd).catch(e => {
+            showToast(`Boot error: ${e.message}`, 'error');
+            const err = document.createElement('div');
+            err.style.color = '#f44747';
+            err.textContent = `[Error] ${e.message}`;
+            consoleEl.appendChild(err);
+        });
     }
 
-    function resetOnboarding() {
+    window.resetOnboarding = function() {
         settings = {};
         localStorage.removeItem('zcms-settings');
-        steps.login.classList.remove('hidden');
-        steps.picker.classList.add('hidden');
-        activeRepoDisplay.textContent = '';
-        showToast('Verbindung getrennt', 'info');
-    }
+        location.reload();
+    };
 
-    // CMS Logic
-    function toggleCms() {
+    window.toggleCms = function() {
         cmsActive = !cmsActive;
+        // Send config with proxy setup
+        frame.contentWindow.postMessage({ 
+            type: 'CMS_CONFIG', 
+            proxyUrl: window.location.origin + '/proxy?url=' 
+        }, '*');
         frame.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: cmsActive }, '*');
-        document.getElementById('toggleBtn').textContent = cmsActive ? 'CMS deaktivieren' : 'CMS aktivieren';
+        document.getElementById('toggleBtn').textContent = cmsActive ? 'Stop CMS' : 'Activate CMS';
         document.getElementById('statusDot').className = cmsActive ? 'status-dot' : 'status-dot off';
-    }
+    };
 
-    window.onmessage = (e) => {
+
+    window.onmessage = async (e) => {
         if (e.data.type === 'CMS_CHANGED') {
             changes = e.data.changes;
+            entries = e.data.entries || [];
             updateUI();
+
+            // LIVE-SYNC with Debounce & Incremental Update
+            if (cmsService) {
+                if (syncTimeout) clearTimeout(syncTimeout);
+                syncTimeout = setTimeout(async () => {
+                    for (const entry of entries) {
+                        const syncKey = `${entry.selector}:${entry.updated}`;
+                        // Only sync if value is different from original AND different from last synced state
+                        if (entry.original && entry.updated !== entry.original && lastSynced[entry.selector] !== entry.updated) {
+                            await cmsService.applySmartMatchChange(entry.original, entry.updated, entry.sourceFile);
+                            lastSynced[entry.selector] = entry.updated;
+                        }
+                    }
+                }, 300);
+            }
         }
     };
 
     function updateUI() {
         const count = Object.keys(changes).length;
         document.getElementById('saveBtn').style.display = count > 0 ? 'inline-flex' : 'none';
-        
         const body = document.getElementById('historyBody');
         body.innerHTML = '';
         for (const [sel, val] of Object.entries(changes)) {
@@ -301,9 +403,26 @@
         }
     }
 
-    function toggleHistory() {
+    window.toggleHistory = function() {
         document.getElementById('historyPanel').classList.toggle('open');
-    }
+    };
+
+    window.toggleSettings = function() {
+        const panel = document.getElementById('settingsPanel');
+        panel.classList.toggle('open');
+        if (panel.classList.contains('open')) {
+            document.getElementById('manualCommandInput').value = localStorage.getItem('zcms-manual-command') || '';
+        }
+    };
+
+    window.saveSettings = function() {
+        const cmd = document.getElementById('manualCommandInput').value.trim();
+        if (cmd) localStorage.setItem('zcms-manual-command', cmd);
+        else localStorage.removeItem('zcms-manual-command');
+        
+        document.getElementById('settingsPanel').classList.remove('open');
+        showToast('Settings saved!', 'success');
+    };
 
     function showToast(msg, type = 'success') {
         const t = document.getElementById('toast');
@@ -312,21 +431,53 @@
         setTimeout(() => t.className = 'toast', 3000);
     }
 
-    async function saveChanges() {
-        // Implementation for real commit would happen here
-        showToast('Änderungen werden an GitHub gesendet...', 'info');
-        setTimeout(() => {
-            showToast('Erfolgreich gespeichert!', 'success');
-            changes = {};
-            updateUI();
-        }, 1500);
-    }
+    window.saveChanges = async function() {
+        if (!cmsService) return;
+        
+        try {
+            // 1. Apply each visual change to the source files via SmartMatch
+            showToast('Applying smart-match transformations...', 'info');
+            for (const entry of entries) {
+                if (entry.original && entry.updated !== entry.original) {
+                    await cmsService.applySmartMatchChange(entry.original, entry.updated);
+                }
+            }
 
-    function clearAll() {
+            // 2. Push the updated source files to GitHub
+            showToast('Syncing to GitHub...', 'info');
+            await cmsService.publishChanges('Visual update via ZeroCMS');
+            
+            showToast('Changes published! Refreshing...', 'success');
+            changes = {};
+            entries = [];
+            updateUI();
+            
+            // CLEAR IFRAME STORAGE: This is the crucial step to avoid the "one step behind" discrepancy
+            frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
+        } catch (e) {
+            showToast(`Publish error: ${e.message}`, 'error');
+        }
+    };
+
+    window.rollbackLastCommit = async function() {
+        if (!cmsService) return;
+        if (!confirm('WARNING: This will permanently delete the last commit on GitHub and locally. Only do this if you accidentally pushed internal CMS files. Continue?')) return;
+        
+        try {
+            showToast('Rolling back last commit...', 'info');
+            await cmsService.undoLastCommitAndForcePush();
+            showToast('History cleaned up successfully!', 'success');
+        } catch (e) {
+            showToast(`Rollback failed: ${e.message}`, 'error');
+        }
+    };
+
+    window.clearAll = function() {
         changes = {};
+        entries = [];
         updateUI();
         frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
-    }
+    };
 </script>
 </body>
 </html>

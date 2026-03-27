@@ -1,0 +1,12 @@
+{
+  "name": "zero-config-cms",
+  "version": "1.0.0",
+  "description": "Zero-Config In-Browser CMS with WebContainers and isomorphic-git",
+  "main": "serve.js",
+  "scripts": {
+    "start": "node serve.js",
+    "dev": "node serve.js"
+  },
+  "author": "ZeroCMS Team",
+  "license": "MIT"
+}

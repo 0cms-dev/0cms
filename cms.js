@@ -11,10 +11,15 @@ class ZeroConfigCMS {
   init() {
     this.setupStyles();
     if (Object.keys(this.changes).length > 0) this.applySavedChanges();
+    this.fixExternalImages();
     
     // Listen for parent commands if in Iframe
     if (this.inIframe) {
       window.addEventListener('message', (e) => {
+        if (e.data.type === 'CMS_CONFIG') {
+          this.proxyUrl = e.data.proxyUrl;
+          this.fixExternalImages();
+        }
         if (e.data.type === 'CMS_TOGGLE') {
           e.data.enabled ? this.enable() : this.disable();
         }
@@ -36,12 +41,81 @@ class ZeroConfigCMS {
   }
 
   notifyParent() {
-    if (this.inIframe) {
+    if (this.notifyTimeout) clearTimeout(this.notifyTimeout);
+    this.notifyTimeout = setTimeout(() => this._performNotify(), 300);
+  }
+
+  _performNotify() {
+    if (!this.inIframe) return;
+    try {
+      const entries = Object.entries(this.changes).map(([sel, val]) => {
+        try {
+          const el = document.querySelector(sel);
+          const sourceFile = el ? (el.dataset.cmsSource || el.getAttribute('data-astro-source-file') || document.body.dataset.cmsSource) : null;
+          return {
+            selector: sel,
+            updated: val,
+            original: el ? el.dataset.cmsOriginal : null,
+            sourceFile: sourceFile,
+            type: el ? (el.tagName === 'IMG' ? 'image' : 'text') : 'unknown'
+          };
+        } catch (e) { return null; }
+      }).filter(Boolean);
+
       window.parent.postMessage({ 
         type: 'CMS_CHANGED', 
-        changes: this.changes 
+        changes: this.changes,
+        entries: entries
       }, '*');
+    } catch (e) {
+      console.warn('[CMS] Failed to notify parent:', e.message);
     }
+  }
+
+  fixExternalImages() {
+    const fix = (img) => {
+      if (!img.src || img.getAttribute('data-cms-fixed')) return;
+      try {
+        const url = new URL(img.src, window.location.href);
+        if (url.origin !== window.location.origin) {
+          if (this.proxyUrl) {
+            console.log(`[CMS] Proxying external image: ${img.src}`);
+            img.src = this.proxyUrl + encodeURIComponent(img.src);
+            img.setAttribute('data-cms-fixed', 'true');
+          } else if (!img.hasAttribute('crossorigin')) {
+            img.setAttribute('crossorigin', 'anonymous');
+            const originalSrc = img.src;
+            img.src = '';
+            img.src = originalSrc;
+          }
+        }
+      } catch (e) {}
+    };
+
+    document.querySelectorAll('img').forEach(fix);
+    this.fixDynamicImages(fix);
+  }
+
+  fixDynamicImages(fix) {
+    if (this.imgObserver) return;
+    this.imgObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeName === 'IMG') fix(node);
+            else if (node.querySelectorAll) node.querySelectorAll('img').forEach(fix);
+          });
+        } else if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+          fix(mutation.target);
+        }
+      });
+    });
+    this.imgObserver.observe(document.body, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src']
+    });
   }
 
   setupStyles() {
@@ -51,7 +125,9 @@ class ZeroConfigCMS {
     style.textContent = `
       .cms-editable:hover { outline: 2px dashed #3498db !important; outline-offset: 2px; cursor: pointer; }
       .cms-editable:focus { outline: 2px solid #2ecc71 !important; background: rgba(46, 204, 113, 0.05); }
-      .cms-img-container { position: relative; display: inline-block; width: 100%; }
+      .cms-img-container { position: relative; display: inline-block; vertical-align: middle; max-width: 100%; transition: all 0.2s; }
+      .cms-img-container img { cursor: crosshair; transition: transform 0.2s; }
+      .cms-img-container:hover img { transform: scale(1.02); outline: 2px dashed #3498db; }
       .cms-img-overlay, .cms-block-menu { 
         position: absolute; top: 5px; right: 5px; display: flex; gap: 4px; 
         opacity: 0; transition: opacity 0.2s; z-index: 1000; 
@@ -137,10 +213,13 @@ class ZeroConfigCMS {
     for (const [selector, content] of Object.entries(this.changes)) {
       const el = document.querySelector(selector);
       if (el) {
+        if (!el.dataset.cmsOriginal) el.dataset.cmsOriginal = el.tagName === 'IMG' ? el.src : el.innerText;
         if (el.tagName === 'IMG') el.src = content;
         else el.innerText = content;
       }
     }
+    // Final notification after batch apply
+    this.notifyParent();
   }
 
   showDiff() {
@@ -182,6 +261,7 @@ class ZeroConfigCMS {
 
   scanAndApply() {
     this.setupStyles();
+    this.fixExternalImages();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         const p = node.parentElement;
@@ -209,6 +289,12 @@ class ZeroConfigCMS {
   makeEditable(el) {
     if (el.dataset.cmsReady) return;
     el.dataset.cmsReady = 'true';
+    if (!el.dataset.cmsOriginal) el.dataset.cmsOriginal = el.innerText;
+    
+    // Resolve source file information from the element or body
+    const sourceFile = el.getAttribute('data-astro-source-file') || document.body.dataset.cmsSource;
+    if (sourceFile) el.dataset.cmsSource = sourceFile;
+
     el.classList.add('cms-editable');
     try { el.contentEditable = 'plaintext-only'; } catch (e) { el.contentEditable = 'true'; }
     el.onblur = () => this.saveChange(this.getSelector(el), el.innerText);
@@ -218,6 +304,7 @@ class ZeroConfigCMS {
   makeImageEditable(img) {
     if (img.dataset.cmsReady) return;
     img.dataset.cmsReady = 'true';
+    if (!img.dataset.cmsOriginal) img.dataset.cmsOriginal = img.src;
     const container = document.createElement('div');
     container.className = 'cms-img-container';
     img.parentNode.insertBefore(container, img);
