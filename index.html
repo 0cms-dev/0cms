@@ -169,23 +169,36 @@
 
     <div class="admin-bar cms-ui">
         <span>Admin Mode: <strong>Off</strong></span>
-        <span id="cmsCounter" style="display:none; color:#3498db; font-size:0.8rem; background:rgba(52,152,219,0.1); padding:2px 8px; border-radius:10px;">0 Changes</span>
+        <span id="cmsCounter" style="display:none; color:#3498db; font-size:0.8rem; background:rgba(52,152,219,0.1); padding:4px 10px; border-radius:10px; cursor:pointer;" title="View Changes">0 Changes saved</span>
         <button id="toggleCms" class="btn-toggle">Enable CMS</button>
+        <button id="publishSync" class="btn-toggle" style="display:none; background:#2ecc71; margin-left:10px;">Publish to GitHub</button>
     </div>
 
     <script type="module">
         import cms from './cms.js';
         
         const btn = document.getElementById('toggleCms');
-        const status = btn.previousElementSibling.previousElementSibling.querySelector('strong');
+        const pubBtn = document.getElementById('publishSync');
+        const status = document.querySelector('.admin-bar span strong');
         const counter = document.getElementById('cmsCounter');
 
         let isActive = false;
+
+        counter.addEventListener('click', () => cms.showDiff());
 
         window.addEventListener('cms-changed', (e) => {
             const count = Object.keys(e.detail).length;
             counter.textContent = `${count} Changes saved`;
             counter.style.display = count > 0 ? 'inline' : 'none';
+            pubBtn.style.display = count > 0 ? 'inline' : 'none';
+        });
+
+        pubBtn.addEventListener('click', () => {
+            const repo = prompt('Enter GitHub Repo (user/repo):');
+            const token = prompt('Enter GitHub Personal Access Token (PAT):');
+            if (repo && token) {
+                alert('GitHub Sync: This would now commit ' + Object.keys(cms.changes).length + ' changes to ' + repo);
+            }
         });
 
         btn.addEventListener('click', () => {
