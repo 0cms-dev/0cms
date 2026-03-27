@@ -447,13 +447,14 @@
             showToast('Syncing to GitHub...', 'info');
             await cmsService.publishChanges('Visual update via ZeroCMS');
             
-            showToast('Changes published! Refreshing...', 'success');
+            showToast('Changes published!', 'success');
             changes = {};
             entries = [];
             updateUI();
             
-            // CLEAR IFRAME STORAGE: This is the crucial step to avoid the "one step behind" discrepancy
-            frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
+            // SILENT SYNC: Only clear local storage, don't force a reload
+            // This relies on the SSG's HMR to update the content naturally
+            frame.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
         } catch (e) {
             showToast(`Publish error: ${e.message}`, 'error');
         }

@@ -28,6 +28,11 @@ class ZeroConfigCMS {
           localStorage.removeItem(this.storageKey);
           location.reload();
         }
+        if (e.data.type === 'CMS_PURGE') {
+          this.changes = {};
+          localStorage.removeItem(this.storageKey);
+          // Silent - no reload, let SSG HMR handle it
+        }
         if (e.data.type === 'CMS_REVERT' && e.data.selector) {
           delete this.changes[e.data.selector];
           localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
