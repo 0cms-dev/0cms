@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-Config CMS Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #1a1a1a;
+            --primary: #3498db;
+            --secondary: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: var(--bg);
+            border-bottom: 1px solid #eee;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-weight: 600;
+            font-size: 1.25rem;
+            color: var(--primary);
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 1.5rem;
+            margin: 0;
+            padding: 0;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        main {
+            max-width: 800px;
+            margin: 4rem auto;
+            padding: 0 1rem;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .teaser {
+            font-size: 1.25rem;
+            color: #666;
+        }
+
+        .content-section {
+            margin-bottom: 3rem;
+        }
+
+        .featured-image {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin: 2rem 0;
+            background: #eee;
+        }
+
+        .admin-bar {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #2d3436;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 1000;
+        }
+
+        .admin-bar span {
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        button.btn-toggle {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.1s;
+        }
+
+        button.btn-toggle:active {
+            transform: scale(0.95);
+        }
+
+        footer {
+            background: var(--secondary);
+            padding: 4rem 2rem;
+            text-align: center;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">0CMS</div>
+        <nav>
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">Services</a></li>
+                <li><a href="#">About</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>The Future of Simple Editing</h1>
+            <p class="teaser">Experience a zero-configuration CMS that works directly on your production HTML. No databases, no complex backends, just raw content.</p>
+        </section>
+
+        <section class="content-section">
+            <h2>Why Zero-Config?</h2>
+            <p>Traditional CMS solutions require heavy setups. With our module, you simply include a script, and your static page becomes a living interface. Perfect for landings, simple blogs, and portfolios.</p>
+            
+            <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=1200" alt="Code on a screen" class="featured-image">
+            
+            <p>The parser understands your DOM structure and identifies what is content and what is UI infrastructure. This ensures you can't accidentally break your navigation or action buttons.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Zero-Config CMS Project. All rights reserved.</p>
+    </footer>
+
+    <div class="admin-bar">
+        <span>Admin Mode: <strong>Off</strong></span>
+        <button id="toggleCms" class="btn-toggle">Enable CMS</button>
+    </div>
+
+    <script type="module">
+        import cms from './cms.js';
+        
+        const btn = document.getElementById('toggleCms');
+        const status = btn.previousElementSibling.querySelector('strong');
+
+        btn.addEventListener('click', () => {
+            cms.enable();
+            status.textContent = 'On';
+            status.style.color = '#2ecc71';
+            btn.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
