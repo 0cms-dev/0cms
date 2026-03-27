@@ -167,7 +167,7 @@
         <p>&copy; 2026 Zero-Config CMS Project. All rights reserved.</p>
     </footer>
 
-    <div class="admin-bar cms-ui">
+    <div id="localAdminBar" class="admin-bar cms-ui">
         <span>Admin Mode: <strong>Off</strong></span>
         <span id="cmsCounter" style="display:none; color:#3498db; font-size:0.8rem; background:rgba(52,152,219,0.1); padding:4px 10px; border-radius:10px; cursor:pointer;" title="View Changes">0 Changes saved</span>
         <button id="toggleCms" class="btn-toggle">Enable CMS</button>
@@ -177,6 +177,11 @@
     <script type="module">
         import cms from './cms.js';
         
+        // Hide local admin bar if in dashboard iframe
+        if (window.self !== window.top) {
+            document.getElementById('localAdminBar').style.display = 'none';
+        }
+
         const btn = document.getElementById('toggleCms');
         const pubBtn = document.getElementById('publishSync');
         const status = document.querySelector('.admin-bar span strong');

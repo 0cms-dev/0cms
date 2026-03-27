@@ -4,12 +4,38 @@ class ZeroConfigCMS {
     this.styleId = 'cms-styles';
     this.storageKey = `cms-data-${window.location.pathname}`;
     this.changes = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+    this.inIframe = window.self !== window.top;
     this.init();
   }
 
   init() {
     this.setupStyles();
     if (Object.keys(this.changes).length > 0) this.applySavedChanges();
+    
+    // Listen for parent commands if in Iframe
+    if (this.inIframe) {
+      window.addEventListener('message', (e) => {
+        if (e.data.type === 'CMS_TOGGLE') {
+          e.data.enabled ? this.enable() : this.disable();
+        }
+        if (e.data.type === 'CMS_CLEAR') {
+          this.changes = {};
+          localStorage.removeItem(this.storageKey);
+          location.reload();
+        }
+      });
+      // Initial notification of existing changes
+      this.notifyParent();
+    }
+  }
+
+  notifyParent() {
+    if (this.inIframe) {
+      window.parent.postMessage({ 
+        type: 'CMS_CHANGED', 
+        changes: this.changes 
+      }, '*');
+    }
   }
 
   setupStyles() {
@@ -98,6 +124,7 @@ class ZeroConfigCMS {
     this.changes[selector] = content;
     localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
     window.dispatchEvent(new CustomEvent('cms-changed', { detail: this.changes }));
+    this.notifyParent();
   }
 
   applySavedChanges() {
@@ -167,7 +194,6 @@ class ZeroConfigCMS {
       if (!img.closest('.cms-ui') && !img.closest('nav')) this.makeImageEditable(img);
     });
 
-    // Reliable Block Detection (Cards/Sections/Lists)
     const blockSelectors = ['main > section', '.card', 'article', '.content-section', '.feature-item', 'li'];
     document.querySelectorAll(blockSelectors.join(',')).forEach(block => {
       if (!block.closest('.cms-ui') && !block.closest('nav')) this.makeBlockActionable(block);
@@ -211,15 +237,14 @@ class ZeroConfigCMS {
     menu.append(
       this.createBtn('Duplicate', () => {
         const clone = block.cloneNode(true);
-        // Clean up clone before insertion
         clone.classList.remove('cms-block');
         clone.querySelectorAll('.cms-ui').forEach(ui => ui.remove());
         clone.querySelectorAll('[data-cms-ready]').forEach(el => {
           delete el.dataset.cmsReady;
-          el.classList.remove('cms-editable', 'cms-img-editable');
+          el.classList.remove('cms-editable', 'cms-img-editable', 'cms-block');
         });
         block.parentNode.insertBefore(clone, block.nextSibling);
-        this.scanAndApply(); // Re-scan newly added block
+        this.scanAndApply();
       }),
       this.createBtn('Delete', () => {
         if (confirm('Permanently delete this block?')) block.remove();
@@ -232,7 +257,12 @@ class ZeroConfigCMS {
     const btn = document.createElement('button');
     btn.className = `cms-btn ${danger ? 'cms-btn-danger' : ''}`;
     btn.textContent = text;
-    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); onclick(); };
+    btn.type = 'button';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onclick();
+    }, true);
     return btn;
   }
 
