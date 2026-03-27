@@ -167,8 +167,9 @@
         <p>&copy; 2026 Zero-Config CMS Project. All rights reserved.</p>
     </footer>
 
-    <div class="admin-bar">
+    <div class="admin-bar cms-ui">
         <span>Admin Mode: <strong>Off</strong></span>
+        <span id="cmsCounter" style="display:none; color:#3498db; font-size:0.8rem; background:rgba(52,152,219,0.1); padding:2px 8px; border-radius:10px;">0 Changes</span>
         <button id="toggleCms" class="btn-toggle">Enable CMS</button>
     </div>
 
@@ -176,13 +177,32 @@
         import cms from './cms.js';
         
         const btn = document.getElementById('toggleCms');
-        const status = btn.previousElementSibling.querySelector('strong');
+        const status = btn.previousElementSibling.previousElementSibling.querySelector('strong');
+        const counter = document.getElementById('cmsCounter');
+
+        let isActive = false;
+
+        window.addEventListener('cms-changed', (e) => {
+            const count = Object.keys(e.detail).length;
+            counter.textContent = `${count} Changes saved`;
+            counter.style.display = count > 0 ? 'inline' : 'none';
+        });
 
         btn.addEventListener('click', () => {
-            cms.enable();
-            status.textContent = 'On';
-            status.style.color = '#2ecc71';
-            btn.style.display = 'none';
+            isActive = !isActive;
+            if (isActive) {
+                cms.enable();
+                status.textContent = 'On';
+                status.style.color = '#2ecc71';
+                btn.textContent = 'Disable CMS';
+                btn.style.background = '#e74c3c';
+            } else {
+                cms.disable();
+                status.textContent = 'Off';
+                status.style.color = 'inherit';
+                btn.textContent = 'Enable CMS';
+                btn.style.background = 'var(--primary)';
+            }
         });
     </script>
 </body>
