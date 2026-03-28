@@ -25,6 +25,7 @@ export class WebContainerGitService {
     this.onLog = config.onLog || ((msg) => console.log(`[WC-Log] ${msg}`));
     
     this.isBooting = false;
+    this.isDevMode = false;
     this.serverProcess = null;
     this.middlewareProc = null;
   }
@@ -100,8 +101,15 @@ export class WebContainerGitService {
         return await this.clone();
       }
     } catch (e) {
-      console.error('[CMS] Git Fetch Error:', e);
-      throw new Error(`Git sync failed: ${e.message}. Is your token correct?`);
+      if (this.isDevMode) console.warn('[CMS] Git Pull failed, attempting fresh sync:', e.message);
+      this.onStatusChange('Optimizing environment...');
+      try {
+        await this.wipeDir(this.dir);
+        return await this.clone();
+      } catch (wipeErr) {
+        console.error('[CMS] Fresh sync failed:', wipeErr);
+        throw new Error(`Git sync failed: ${e.message}. Is your token correct?`);
+      }
     }
   }
 
@@ -328,9 +336,11 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     this.onStatusChange('Installing Dependencies...');
     const installProcess = await this.webcontainerInstance.spawn('npm', ['install']);
     
-    // Log output for debugging
+    // Log output only in dev mode
     installProcess.output.pipeTo(new WritableStream({
-      write: (data) => console.log('[npm install]', data)
+      write: (data) => {
+          if (this.isDevMode) console.log('[npm install]', data);
+      }
     }));
 
     const exitCode = await installProcess.exit;
@@ -400,16 +410,18 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     const serverProcess = this.serverProcess;
     
     serverProcess.output.pipeTo(new WritableStream({
-      write: (data) => this.onLog(`[server] ${data}`)
+      write: (data) => {
+          if (this.isDevMode) console.log(`[server] ${data}`);
+      }
     }));
 
-    let middlewareStarted = false;
+    this.middlewareStarted = false;
 
     // Listen for the server-ready event of WebContainers
     this.webcontainerInstance.on('server-ready', async (port, url) => {
       // 1. If it's the first port (not our middleware), start the middleware
-      if (port !== 3001 && !middlewareStarted) {
-        middlewareStarted = true;
+      if (port !== 3001 && !this.middlewareStarted) {
+        this.middlewareStarted = true;
         this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
         
         try {
@@ -422,6 +434,7 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
           }));
         } catch (e) {
           this.onLog(`[Error] Failed to start middleware: ${e.message}`);
+          this.middlewareStarted = false; // Reset on failure
         }
       }
 
@@ -664,21 +677,34 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     if (!detectedDir) return;
     this.onLog(`[Quantum] Caching build results from /${detectedDir}`);
     
+    const ensureDir = async (path) => {
+      const parts = path.split('/').filter(Boolean);
+      let currentPath = '';
+      for (const part of parts) {
+        currentPath += '/' + part;
+        await this.fs.mkdir(currentPath).catch(() => {});
+      }
+    };
+    
     const syncDirRecursive = async (path) => {
       const entries = await this.webcontainerInstance.fs.readdir(path, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`;
+        const cachePath = `/__qcms_cache__${fullPath}`;
         if (entry.isDirectory()) {
-          await this.fs.mkdir(`/__qcms_cache__${fullPath}`).catch(() => {});
+          await ensureDir(cachePath);
           await syncDirRecursive(fullPath);
         } else {
+          // Ensure parent directory exists before writing file
+          const parentDir = cachePath.substring(0, cachePath.lastIndexOf('/'));
+          await ensureDir(parentDir);
           const content = await this.webcontainerInstance.fs.readFile(fullPath);
-          await this.fs.writeFile(`/__qcms_cache__${fullPath}`, content);
+          await this.fs.writeFile(cachePath, content);
         }
       }
     };
     
-    await this.fs.mkdir('/__qcms_cache__').catch(() => {});
+    await ensureDir('/__qcms_cache__');
     await syncDirRecursive(`/${detectedDir}`);
     
     // Also trigger snapshot of modules while we're at it

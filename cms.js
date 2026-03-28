@@ -42,6 +42,8 @@ class ZeroConfigCMS {
       });
       // Initial notification of existing changes
       this.notifyParent();
+      // Signal that the CMS is ready to be used
+      window.parent.postMessage({ type: 'CMS_READY' }, '*');
     }
   }
 

@@ -139,7 +139,10 @@ const server = http.createServer((req, res) => {
   }
 
   let filePath = '.' + req.url.split('?')[0];
-  if (filePath === './' || filePath === './admin.html') filePath = './index.html';
+  // Map root to the main index.html (One-Pager)
+  if (filePath === './') {
+    filePath = './index.html';
+  }
   
   // High-Performance Library Serving
   if (req.url.startsWith('/lib/')) {
@@ -172,7 +175,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\x1b[32m[ZeroCMS] Server running at http://localhost:${PORT}\x1b[0m`);
-  console.log(`\x1b[33mOpen http://localhost:${PORT}/admin.html to start the CMS.\x1b[0m`);
+  console.log(`\x1b[33mOpen http://localhost:${PORT} to start the CMS.\x1b[0m`);
   if (CLIENT_ID === 'YOUR_CLIENT_ID') {
     console.log(`\x1b[31m[!] GITHUB_CLIENT_ID is not configured. OAuth will not work.\x1b[0m`);
   }
