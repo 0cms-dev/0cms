@@ -14,6 +14,7 @@ export class WebContainerGitService {
     this.proxy = config.proxy || 'https://cors.isomorphic-git.org';
     this.token = config.token;
     
+    this.config = config;
     this.fs = new FS('cms-fs').promises;
     this.webcontainerInstance = null;
     this.serverUrl = null;
@@ -22,12 +23,25 @@ export class WebContainerGitService {
     this.onStatusChange = config.onStatusChange || (() => {});
     this.onServerReady = config.onServerReady || (() => {});
     this.onLog = config.onLog || ((msg) => console.log(`[WC-Log] ${msg}`));
+    
+    this.isBooting = false;
+    this.serverProcess = null;
+    this.middlewareProc = null;
   }
 
   /**
    * Initialize the entire pipeline: Git -> WebContainer -> Dev Server
    */
   async boot(manualCommand = null) {
+    if (this.serverUrl) {
+        this.onLog('[Service] Engine already running. Skipping boot.');
+        return;
+    }
+    if (this.isBooting) {
+        this.onLog('[Service] Engine is already initializing. Please wait...');
+        return;
+    }
+    this.isBooting = true;
     try {
       this.onStatusChange('Initializing FileSystem...');
       const fsExists = await this.fs.readdir(this.dir).then(e => e.length > 0).catch(() => false);
@@ -42,15 +56,21 @@ export class WebContainerGitService {
       await this.syncToWebContainer();
       
       this.onStatusChange('Preparing Environment...');
+      await this.loadSnapshot(); // Restore node_modules snapshot if available
       await this.installDependencies();
       
       this.onStatusChange('Starting Dev Server...');
       await this.startDevServer(manualCommand);
       
+      // Schedule background cache sync
+      setTimeout(() => this.syncBuildCache(), 5000); 
+      
     } catch (error) {
       console.error('[CMS Service] Boot failed:', error);
       this.onStatusChange(`Error: ${error.message}`);
       throw error;
+    } finally {
+      this.isBooting = false;
     }
   }
 
@@ -160,6 +180,9 @@ export class WebContainerGitService {
   async startMiddleware() {
     this.onStatusChange('Starting CMS Middleware...');
     
+    // Check if we have a cached build to serve instantly
+    const hasCache = await this.fs.readdir('/__qcms_cache__').then(e => e.length > 0).catch(() => false);
+    
     // 1. Create the middleware proxy script
     const middlewareContent = `
 const http = require('http');
@@ -168,67 +191,66 @@ const path = require('path');
 const TARGET_PORT = process.env.TARGET_PORT || 4000;
 const PROXY_PORT = 3001;
 
+const findInCache = (url) => {
+    const cacheDir = '/__qcms_cache__';
+    const normalizedUrl = url === '/' ? '/index.html' : url;
+    const fullPath = path.join(cacheDir, normalizedUrl);
+    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) return fullPath;
+    const altPaths = [
+        path.join(cacheDir, 'index.html'),
+        path.join(cacheDir, 'public/index.html'),
+        path.join(cacheDir, 'dist/index.html'),
+        path.join(cacheDir, '_site/index.html')
+    ];
+    for (const alt of altPaths) {
+        if (fs.existsSync(alt) && fs.statSync(alt).isFile()) return alt;
+    }
+    return null;
+};
+
 const server = http.createServer((req, res) => {
-  // Serve the bridge script (handle base paths)
+  if (req.url === '/__zcms_ping') {
+      res.writeHead(200); res.end('pong'); return;
+  }
   if (req.url.endsWith('/zcms-bridge.js')) {
     try {
-      res.writeHead(200, { 
-        'Content-Type': 'application/javascript',
-        'Cross-Origin-Resource-Policy': 'cross-origin' 
-      });
+      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cross-Origin-Resource-Policy': 'cross-origin', 'Access-Control-Allow-Origin': '*' });
       res.end(fs.readFileSync('./zcms-bridge.js', 'utf8'));
       return;
-    } catch (e) {
-      console.error('[Middleware] Failed to serve bridge:', e.message);
-    }
+    } catch (e) {}
   }
-
-  const options = {
-    hostname: 'localhost',
-    port: TARGET_PORT,
-    path: req.url,
-    method: req.method,
-    headers: req.headers
-  };
-
+  const options = { hostname: '127.0.0.1', port: TARGET_PORT, path: req.url, method: req.method, headers: req.headers };
   const proxyReq = http.request(options, (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || '';
-    const isHtml = contentType.includes('text/html');
-
-    if (isHtml) {
+    if (contentType.includes('text/html')) {
       let body = [];
       proxyRes.on('data', (chunk) => body.push(chunk));
       proxyRes.on('end', () => {
         let html = Buffer.concat(body).toString('utf8');
         if (html.includes('</body>') && !html.includes('zcms-bridge.js')) {
-          // Identify the correct base path for the script injection
-          // If we are at /foo/, the script should be /foo/zcms-bridge.js
-          const pathParts = req.url.split('/');
-          pathParts.pop();
-          const basePath = pathParts.join('/') || '';
-          const scriptTag = '<script type="module" src="' + basePath + '/zcms-bridge.js"></script></body>';
-          html = html.replace('</body>', scriptTag);
+          html = html.replace('</body>', '<script type="module" src="/zcms-bridge.js"></script></body>');
         }
-        const headers = { ...proxyRes.headers };
-        delete headers['content-length'];
-        res.writeHead(proxyRes.statusCode, headers);
-        res.end(html);
+        const headers = { ...proxyRes.headers }; delete headers['content-length'];
+        res.writeHead(proxyRes.statusCode, headers); res.end(html);
       });
     } else {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res);
+      res.writeHead(proxyRes.statusCode, proxyRes.headers); proxyRes.pipe(res);
     }
   });
-
   proxyReq.on('error', (e) => {
-    res.writeHead(502);
-    res.end('<h1>CMS Proxy Error</h1><p>SSG Server not responding on port ' + TARGET_PORT + '</p>');
+    const cachePath = findInCache(req.url);
+    if (cachePath) {
+      const ext = path.extname(cachePath);
+      const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[ext] || 'text/plain';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache', 'Cross-Origin-Resource-Policy': 'cross-origin' });
+      res.end(fs.readFileSync(cachePath));
+    } else {
+      res.writeHead(502); res.end('Proxy Error: SSG down and no cache');
+    }
   });
-
   req.pipe(proxyReq);
 });
-
-server.listen(PROXY_PORT, () => console.log('[Middleware] CMS Bridge running on port ' + PROXY_PORT));
+server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge running on port ' + PROXY_PORT));
     `;
     
     // Use relative paths for writing within the WebContainer
@@ -359,12 +381,23 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       }
     }
 
+    // Cleanup previous processes if any
+    if (this.serverProcess) {
+       this.onLog('[Cleanup] Stopping previous dev server...');
+       this.serverProcess.kill();
+    }
+    if (this.middlewareProc) {
+       this.onLog('[Cleanup] Stopping previous CMS bridge...');
+       this.middlewareProc.kill();
+    }
+
     this.onStatusChange(`Running: ${devCommand}...`);
     const cmdTokens = devCommand.split(' ');
     const cmd = cmdTokens[0];
     const args = cmdTokens.slice(1);
     
-    const serverProcess = await this.webcontainerInstance.spawn(cmd, args);
+    this.serverProcess = await this.webcontainerInstance.spawn(cmd, args);
+    const serverProcess = this.serverProcess;
     
     serverProcess.output.pipeTo(new WritableStream({
       write: (data) => this.onLog(`[server] ${data}`)
@@ -380,11 +413,11 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
         this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
         
         try {
-          const middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
+          this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
             env: { TARGET_PORT: port }
           });
 
-          middlewareProc.output.pipeTo(new WritableStream({
+          this.middlewareProc.output.pipeTo(new WritableStream({
             write: (data) => this.onLog(`[bridge] ${data}`)
           }));
         } catch (e) {
@@ -394,6 +427,7 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
 
       // 2. If it's our middleware port, we are ready to preview!
       if (port === 3001) {
+        this.serverUrl = url;
         this.onLog(`[Middleware] CMS Bridge Ready! Loading preview...`);
         this.onServerReady(url);
         this.onStatusChange('Server Ready!');
@@ -441,7 +475,7 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     this.onStatusChange('Pushing to GitHub...');
     const pushResult = await git.push({
       fs: this.fs,
-      http: (await import('https://esm.sh/isomorphic-git/http/web/index.js')).default,
+      http: (await import('/lib/isomorphic-git-http.js')).default,
       dir: this.dir,
       url: this.repoUrl,
       onAuth: () => ({ username: this.token }),
@@ -570,7 +604,7 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     this.onStatusChange('Force pushing to GitHub...');
     await git.push({
       fs: this.fs,
-      http: (await import('https://esm.sh/isomorphic-git/http/web/index.js')).default,
+      http: (await import('/lib/isomorphic-git-http.js')).default,
       dir: this.dir,
       url: this.repoUrl,
       force: true, // IMPORTANT: Force push to overwrite remote history
@@ -580,5 +614,74 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
 
     this.onStatusChange('Rollback successful!');
     this.onLog('[Git] Repository history cleaned up.');
+  }
+
+  /**
+   * QUANTUM BOOT: Save/Load binary snapshots of node_modules
+   */
+  async saveSnapshot() {
+    this.onLog('[Quantum] Creating node_modules snapshot...');
+    try {
+      // Create a tarball inside the WebContainer
+      await this.webcontainerInstance.spawn('tar', ['-cf', '/tmp/modules.tar', 'node_modules']);
+      const tarData = await this.webcontainerInstance.fs.readFile('/tmp/modules.tar');
+      
+      // Save the binary blob to lightning-fs
+      await this.fs.writeFile(`${this.dir}/__qcms_snapshot__.tar`, tarData);
+      this.onLog('[Quantum] Snapshot saved successfully.');
+    } catch (e) {
+      this.onLog(`[Warning] Snapshot failed: ${e.message}`);
+    }
+  }
+
+  async loadSnapshot() {
+    try {
+      const tarData = await this.fs.readFile(`${this.dir}/__qcms_snapshot__.tar`).catch(() => null);
+      if (!tarData) return;
+
+      this.onLog('[Quantum] Restoring node_modules snapshot...');
+      await this.webcontainerInstance.fs.writeFile('/tmp/modules.tar', tarData);
+      const untar = await this.webcontainerInstance.spawn('tar', ['-xf', '/tmp/modules.tar', '-C', '/']);
+      await untar.exit;
+      this.onLog('[Quantum] Snapshot restored.');
+    } catch (e) {
+      this.onLog(`[Warning] Load snapshot failed: ${e.message}`);
+    }
+  }
+
+  /**
+   * QUANTUM BOOT: Cache build results for instant preview
+   */
+  async syncBuildCache() {
+    const buildDirs = ['public', 'dist', '_site', 'out', 'build'];
+    let detectedDir = null;
+    
+    for (const d of buildDirs) {
+      const exists = await this.webcontainerInstance.fs.readdir(`/${d}`).then(() => true).catch(() => false);
+      if (exists) { detectedDir = d; break; }
+    }
+
+    if (!detectedDir) return;
+    this.onLog(`[Quantum] Caching build results from /${detectedDir}`);
+    
+    const syncDirRecursive = async (path) => {
+      const entries = await this.webcontainerInstance.fs.readdir(path, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`;
+        if (entry.isDirectory()) {
+          await this.fs.mkdir(`/__qcms_cache__${fullPath}`).catch(() => {});
+          await syncDirRecursive(fullPath);
+        } else {
+          const content = await this.webcontainerInstance.fs.readFile(fullPath);
+          await this.fs.writeFile(`/__qcms_cache__${fullPath}`, content);
+        }
+      }
+    };
+    
+    await this.fs.mkdir('/__qcms_cache__').catch(() => {});
+    await syncDirRecursive(`/${detectedDir}`);
+    
+    // Also trigger snapshot of modules while we're at it
+    this.saveSnapshot();
   }
 }

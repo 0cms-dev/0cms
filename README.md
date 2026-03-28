@@ -26,7 +26,7 @@ Start the local development server:
 ```bash
 npm start
 ```
-By default, the CMS will be available at [http://localhost:3000/admin.html](http://localhost:3000/admin.html).
+By default, the CMS will be available at [http://localhost:3000/](http://localhost:3000/).
 
 ## 🛠 Features
 
@@ -36,13 +36,34 @@ By default, the CMS will be available at [http://localhost:3000/admin.html](http
 - **Persistent Storage**: Uses `lightning-fs` to keep your repository in IndexedDB.
 - **Seamless Publishing**: Commits and pushes changes directly to GitHub.
 
-## 📁 Project Structure
-
-- `admin.html`: The main dashboard for managing your repositories.
+- `index.html`: The modern dashboard for managing your repositories.
 - `WebContainerGitService.js`: The core logic for Git and WebContainer orchestration.
-- `cms.js`: The visual editor script that runs inside the preview iframe.
-- `serve.js`: A simple Node.js server that provides the required COOP/COEP headers.
+- `cms.js`: The visual editor bridge that runs inside the preview iframe.
+- `serve.js`: A simple Node.js server providing COOP/COEP headers.
 - `.env`: (Ignored) Contains your GitHub credentials.
+
+## 🏗 Architecture
+
+ZeroCMS uses a unique high-performance architecture:
+- **Quantum Boot**: Background pre-warming of WebContainers before the user even opens the dashboard.
+- **Visual Bridge**: A zero-config postMessage bridge that allows the host to edit the iframe content in-place.
+- **Binary Snapshots**: Uses `tar` blobs in IndexedDB to skip `npm install` for previously loaded repositories.
+
+## 🤝 Contributing
+
+We welcome contributions! To get started:
+1. **Fork** the repository.
+2. **Setup** your local `.env` with GitHub OAuth credentials.
+3. **Develop** your feature or fix.
+4. **Submit** a Pull Request with a clear description of the changes.
+
+Please ensure your code follows the existing minimalist aesthetic and uses vanilla JS/CSS where possible.
+
+## ❤️ Sponsors
+
+ZeroCMS is an open-source project. If you find it useful, please consider supporting its development:
+- **GitHub Sponsors**: [Support our work](https://github.com/sponsors/megawron)
+- **Open Collective**: [Join our community](https://opencollective.com/0cms)
 
 ## ⚠️ Important Note on WebContainers
 

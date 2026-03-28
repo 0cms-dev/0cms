@@ -139,7 +139,7 @@ const server = http.createServer((req, res) => {
   }
 
   let filePath = '.' + req.url.split('?')[0];
-  if (filePath === './') filePath = './index.html';
+  if (filePath === './' || filePath === './admin.html') filePath = './index.html';
   
   // High-Performance Library Serving
   if (req.url.startsWith('/lib/')) {
@@ -160,7 +160,11 @@ const server = http.createServer((req, res) => {
         res.end('Server Error: ' + error.code);
       }
     } else {
-      res.writeHead(200, { 'Content-Type': contentType });
+      res.writeHead(200, { 
+          'Content-Type': contentType,
+          'Cross-Origin-Embedder-Policy': 'require-corp',
+          'Cross-Origin-Opener-Policy': 'same-origin'
+      });
       res.end(content, 'utf-8');
     }
   });

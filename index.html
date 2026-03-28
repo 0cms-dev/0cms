@@ -18,218 +18,690 @@
     <style>
         :root {
             --bg: #ffffff;
-            --text: #1a1a1a;
-            --primary: #3498db;
-            --secondary: #f8f9fa;
+            --bg-secondary: #f5f5f5;
+            --bg-tertiary: #f0f0f0;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --border: #e5e7eb;
+            --glass: rgba(255, 255, 255, 0.82);
+            --card-bg: #ffffff;
+            --sidebar: #fafafa;
+            --sidebar-active: #f3f4f6;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
         }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            color: var(--text);
-            background: var(--bg);
-            line-height: 1.6;
-            margin: 0;
-            padding: 0;
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0a0a0a;
+                --bg-secondary: #141414;
+                --bg-tertiary: #1a1a1a;
+                --text: #f5f5f5;
+                --text-muted: #a3a3a3;
+                --border: #262626;
+                --glass: rgba(10, 10, 10, 0.82);
+                --card-bg: #111111;
+                --sidebar: #050505;
+                --sidebar-active: #141414;
+                --shadow: 0 10px 20px rgba(0,0,0,0.5);
+            }
         }
 
-        header {
-            background: var(--bg);
-            border-bottom: 1px solid #eee;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: var(--font); 
+            color: var(--text); 
+            background: var(--bg); 
+            line-height: 1.5; 
+            -webkit-font-smoothing: antialiased; 
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* HEADER & NAVIGATION */
+        header { 
+            height: 72px; 
+            padding: 0 2rem; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            border-bottom: 1px solid var(--border); 
+            position: sticky; 
+            top: 0; 
+            background: var(--glass); 
+            backdrop-filter: blur(8px); 
             z-index: 100;
         }
+        .logo { 
+            font-size: 1.5rem; 
+            font-weight: 800; 
+            letter-spacing: -0.04em; 
+            color: var(--text); 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            cursor: default;
+        }
+        .logo svg { width: 24px; height: 24px; color: var(--primary); }
+        nav ul { display: flex; gap: 2rem; list-style: none; }
+        nav a { text-decoration: none; color: var(--text-muted); font-size: 0.93rem; font-weight: 500; transition: color 0.2s; }
+        nav a:hover { color: var(--text); }
 
-        .logo {
-            font-weight: 600;
-            font-size: 1.25rem;
-            color: var(--primary);
+        /* MAIN LANDING */
+        main { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 6rem 2rem; 
+        }
+        .hero { text-align: center; margin-bottom: 8rem; }
+        .hero h1 { 
+            font-size: 4.5rem; 
+            font-weight: 900; 
+            letter-spacing: -0.05em; 
+            line-height: 1; 
+            margin-bottom: 1.5rem; 
+            color: var(--text); 
+        }
+        .hero .teaser { 
+            font-size: 1.25rem; 
+            color: var(--text-muted); 
+            max-width: 600px; 
+            margin: 0 auto; 
+            line-height: 1.6; 
         }
 
-        nav ul {
-            list-style: none;
-            display: flex;
-            gap: 1.5rem;
-            margin: 0;
-            padding: 0;
+        .content-section { margin-bottom: 6rem; position: relative; }
+        .content-section h2 { 
+            font-size: 2.5rem; 
+            font-weight: 800; 
+            letter-spacing: -0.03em; 
+            margin-bottom: 1.5rem; 
         }
-
-        nav a {
-            text-decoration: none;
-            color: var(--text);
-            font-weight: 500;
+        .content-section p { 
+            font-size: 1.125rem; 
+            color: var(--text-muted); 
+            max-width: 700px; 
+            margin-bottom: 2rem; 
         }
-
-        main {
-            max-width: 800px;
-            margin: 4rem auto;
-            padding: 0 1rem;
-        }
-
-        .hero {
-            text-align: center;
-            margin-bottom: 4rem;
-        }
-
-        h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            letter-spacing: -0.02em;
-        }
-
-        .teaser {
-            font-size: 1.25rem;
-            color: #666;
-        }
-
-        .content-section {
-            margin-bottom: 3rem;
-        }
-
-        .featured-image {
-            width: 100%;
-            height: 400px;
+        .featured-image { 
+            width: 100%; 
+            border-radius: 16px; 
+            box-shadow: var(--shadow); 
+            border: 1px solid var(--border); 
+            margin: 2rem 0; 
+            aspect-ratio: 16/9;
             object-fit: cover;
-            border-radius: 12px;
-            margin: 2rem 0;
-            background: #eee;
         }
 
+        /* FOOTER */
+        footer { 
+            border-top: 1px solid var(--border); 
+            padding: 4rem 2rem; 
+            text-align: center; 
+            color: var(--text-muted); 
+            font-size: 0.875rem; 
+        }
+
+        /* ADMIN BAR (Floating Glass UI) */
         .admin-bar {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            background: #2d3436;
-            padding: 0.75rem 1.5rem;
-            border-radius: 50px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            z-index: 1000;
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+            background: var(--glass); backdrop-filter: blur(12px); border: 1px solid var(--border);
+            padding: 8px 12px; border-radius: 100px; display: flex; align-items: center; gap: 12px;
+            box-shadow: var(--shadow); z-index: 1000; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        .admin-bar span { color: var(--text); font-size: 0.81rem; font-weight: 600; padding: 0 8px; }
+        .admin-bar span strong { color: var(--primary); }
+        
+        .btn-toggle { 
+            background: var(--text); color: var(--bg); border: none; 
+            padding: 6px 16px; border-radius: 50px; font-size: 0.81rem; 
+            font-weight: 700; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-toggle:hover { transform: scale(1.05); opacity: 0.9; }
 
-        .admin-bar span {
-            color: #fff;
-            font-size: 0.9rem;
+        /* DASHBOARD OVERLAY (Adaptive Theme Editor) */
+        #cmsDashboard {
+            position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: none;
+            flex-direction: row; overflow: hidden; color: var(--text); 
+            animation: cms-slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        @keyframes cms-slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-        button.btn-toggle {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.5rem 1.25rem;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: transform 0.1s;
-        }
+        .sidebar { width: 260px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .dashboard-main { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
 
-        button.btn-toggle:active {
-            transform: scale(0.95);
+        .sidebar-brand { padding: 24px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+        .brand-logo { display: flex; align-items: center; gap: 10px; font-weight: 900; letter-spacing: -0.04em; font-size: 1.1rem; color: var(--text); }
+        .brand-logo svg { background: var(--primary); padding: 5px; border-radius: 6px; width: 24px; height: 24px; color: white; }
+        
+        .sidebar-section { padding: 0 12px; }
+        .sidebar-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px; padding-left: 12px; }
+        .nav-item { 
+            display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; 
+            font-size: 0.875rem; color: var(--text-muted); cursor: pointer; transition: 0.2s; font-weight: 500;
         }
+        .nav-item:hover { background: var(--sidebar-active); color: var(--text); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--text); }
+        .nav-item svg { width: 18px; height: 18px; }
 
-        footer {
-            background: var(--secondary);
-            padding: 4rem 2rem;
-            text-align: center;
-            border-top: 1px solid #eee;
+        .topbar { height: 64px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; background: var(--bg); }
+        .url-chip { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.81rem; display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+        .status-dot.off { background: var(--text-muted); }
+
+        .btn-cms { padding: 8px 16px; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: 0.2s; border: none; }
+        .btn-cms-outline { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+        .btn-cms-outline:hover { color: var(--text); border-color: var(--text-muted); }
+        .btn-cms-primary { background: var(--primary); color: #fff; }
+        .btn-cms-primary:hover { background: var(--primary-hover); }
+
+        .onboarding-screen { position: absolute; inset: 0; background: var(--bg); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .onboarding-card { background: var(--bg-secondary); width: 100%; max-width: 440px; padding: 40px; border-radius: 16px; border: 1px solid var(--border); text-align: center; }
+        .onboarding-card h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.03em; color: var(--text); }
+        .onboarding-card p { color: var(--text-muted); font-size: 0.93rem; margin-bottom: 30px; }
+
+        .repo-list { max-height: 280px; overflow-y: auto; text-align: left; background: var(--bg); border-radius: 12px; border: 1px solid var(--border); }
+        .repo-item { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; color: var(--text); }
+        .repo-item:last-child { border-bottom: none; }
+        .repo-item:hover { background: var(--bg-secondary); }
+        
+        /* LANDING PROJECT CARD */
+        #cmsLandingProject {
+            max-width: 500px; margin: -4rem auto 6rem; padding: 24px;
+            background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px;
+            text-align: left; display: flex; align-items: center; gap: 20px;
+            box-shadow: var(--shadow);
         }
+        .project-icon { width: 48px; height: 48px; background: var(--bg-tertiary); color: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .project-info { flex: 1; }
+        .project-name { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+        .project-meta { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* FEATURES GRID */
+        .features-section { padding: 120px 24px; max-width: 1000px; margin: 0 auto; text-align: center; }
+        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 60px; }
+        .feature-card { text-align: left; padding: 32px; background: var(--bg-secondary); border-radius: 20px; border: 1px solid var(--border); transition: 0.3s; }
+        .feature-card:hover { transform: translateY(-5px); border-color: var(--primary); }
+        .feature-icon { width: 44px; height: 44px; background: var(--card-bg); color: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; border: 1px solid var(--border); }
+        .feature-card h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.01em; }
+        .feature-card p { font-size: 0.93rem; color: var(--text-muted); line-height: 1.6; }
+
+        /* TERMINAL STYLES */
+        .cms-terminal { 
+            position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg); color: #00ff00; 
+            font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 12px; transition: 0.3s; z-index: 1000;
+            display: flex; flex-direction: column; overflow: hidden; height: 32px;
+        }
+        .cms-terminal.expanded { height: 260px; }
+        .cms-terminal.maximized { height: calc(100% - 60px); }
+        .terminal-header { 
+            background: var(--bg-secondary); padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; 
+            cursor: pointer; border-top: 1px solid var(--border); user-select: none;
+        }
+        .terminal-controls { display: flex; gap: 12px; }
+        .terminal-control { width: 12px; height: 12px; border-radius: 50%; background: var(--border); cursor: pointer; }
+        .terminal-control.green { background: #27c93f; }
+        .terminal-control.yellow { background: #ffbd2e; }
+        .terminal-control.red { background: #ff5f56; }
+        .terminal-body { flex: 1; padding: 12px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; color: var(--text-muted); }
+        
+        .toast { 
+            position: fixed; bottom: 2rem; right: 2rem; padding: 12px 24px; border-radius: 12px; font-size: 0.875rem; 
+            font-weight: 600; color: #fff; z-index: 30000; opacity: 0; transform: translateY(10px); transition: 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.info { background: var(--primary); box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3); }
+        .toast.success { background: #10b981; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
+        .toast.error { background: #ef4444; box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3); }
+
+        /* SPONSORS */
+        .sponsors-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; opacity: 0.4; filter: grayscale(1); transition: 0.3s; }
+        .sponsors-grid:hover { opacity: 0.8; filter: grayscale(0); }
+        .sponsor-logo { font-weight: 700; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+
+        .hidden { display: none !important; }
+        .loader { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; margin: 20px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-
     <header>
-        <div class="logo">0CMS</div>
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            0CMS
+        </div>
         <nav>
             <ul>
-                <li><a href="#">Home</a></li>
-                <li><a href="#">Services</a></li>
-                <li><a href="#">About</a></li>
-                <li><a href="#">Contact</a></li>
+                <li><a href="https://github.com/megawron/0cms-core" target="_blank" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+                    GitHub
+                </a></li>
             </ul>
         </nav>
     </header>
 
     <main>
         <section class="hero">
-            <h1>The Future of Simple Editing</h1>
-            <p class="teaser">Experience a zero-configuration CMS that works directly on your production HTML. No databases, no complex backends, just raw content.</p>
+            <h1>Zero Config.<br>Zero Latency.</h1>
+            <p class="teaser">The fastest way to edit your Jamstack site. No setup, no database, no friction. Just open and edit.</p>
         </section>
 
-        <section class="content-section">
-            <h2>Why Zero-Config?</h2>
-            <p>Traditional CMS solutions require heavy setups. With our module, you simply include a script, and your static page becomes a living interface. Perfect for landings, simple blogs, and portfolios.</p>
-            
-            <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=1200" alt="Code on a screen" class="featured-image">
-            
-            <p>The parser understands your DOM structure and identifies what is content and what is UI infrastructure. This ensures you can't accidentally break your navigation or action buttons.</p>
+        <!-- ACTIVE PROJECT CARD (Landing Page) -->
+        <div id="cmsLandingProject" class="hidden">
+            <div class="project-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            </div>
+            <div class="project-info">
+                <div class="project-name" id="landingRepoName">Loading project...</div>
+                <div class="project-meta">Current Active Repository</div>
+            </div>
+            <button class="btn-toggle" id="btnLandingSwitch" style="background:transparent; border:1px solid var(--border); padding:6px 14px; color:var(--text);">Switch</button>
+        </div>
+
+        <section class="content-section" style="padding-top: 0;">
+            <div class="features-section">
+                <h2>Simplicity by Design</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div>
+                        <h3>1. Connect</h3>
+                        <p>Link your GitHub repository with one click. 0CMS automatically detects your framework.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+                        <h3>2. Edit</h3>
+                        <p>Modify your content directly in our visual editor. What you see is exactly what gets published.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                        <h3>3. Publish</h3>
+                        <p>Push your changes back to GitHub. Fast, secure, and entirely within your browser.</p>
+                    </div>
+                </div>
+            </div>
+
+            <section style="margin-top: 100px; padding: 60px; background: var(--bg-secondary); border-radius: 32px; border: 1px solid var(--border);">
+                <h2 style="margin-bottom: 24px;">The Era of JSON is Over</h2>
+                <p style="max-width: 600px; margin: 0 auto 40px; color: var(--text-muted);">Stop defining fields in complex JSON files. ZeroCMS detects your content structure automatically, allowing you to edit any static site without a single line of configuration.</p>
+                <div style="display: flex; justify-content: center; gap: 40px; font-weight: 600; color: var(--primary);">
+                    <span>✓ No Config</span>
+                    <span>✓ No Database</span>
+                    <span>✓ Instant Live Preview</span>
+                </div>
+            </section>
+
+            <section style="margin-top: 120px; text-align: center;">
+                <div class="sidebar-label" style="margin-bottom: 20px;">Supported By</div>
+                <div class="sponsors-grid">
+                    <div class="sponsor-logo">Acme Corp</div>
+                    <div class="sponsor-logo">Globex</div>
+                    <div class="sponsor-logo">Soylent</div>
+                    <div class="sponsor-logo">Initech</div>
+                    <div class="sponsor-logo">Umbrella</div>
+                </div>
+            </section>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2026 Zero-Config CMS Project. All rights reserved.</p>
+        <p>&copy; 2026 Zero-Config CMS. Built for the modern web.</p>
     </footer>
 
+    <!-- GLASS ADMIN BAR -->
     <div id="localAdminBar" class="admin-bar cms-ui">
-        <span>Admin Mode: <strong>Off</strong></span>
-        <span id="cmsCounter" style="display:none; color:#3498db; font-size:0.8rem; background:rgba(52,152,219,0.1); padding:4px 10px; border-radius:10px; cursor:pointer;" title="View Changes">0 Changes saved</span>
-        <button id="toggleCms" class="btn-toggle">Enable CMS</button>
-        <button id="publishSync" class="btn-toggle" style="display:none; background:#2ecc71; margin-left:10px;">Publish to GitHub</button>
+        <span>Visual Editor: <strong>Ready</strong></span>
+        <span id="cmsCounter" style="display:none; cursor:pointer;">0 Changes</span>
+        <button id="toggleCmsBtn" class="btn-toggle">Open Dashboard</button>
+        <button id="publishSync" class="btn-toggle" style="display:none; background:var(--primary); color:white;">Publish</button>
     </div>
 
+    <!-- QUANTUM DASHBOARD OVERLAY -->
+    <div id="cmsDashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    ZeroCMS
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-label">Project</div>
+                <div class="nav-item active" id="navEditor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Visual Editor</div>
+                <div class="nav-item" id="navSwitchRepo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/><circle cx="12" cy="12" r="3" fill="var(--primary)"/></svg>Switch Project</div>
+                <div class="nav-item" id="navTerminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 11l2 2-2 2M11 15h4"/></svg>Terminal</div>
+                <div class="nav-item" id="navHistory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>History</div>
+                <div class="nav-item" id="navSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
+                <div class="nav-item" id="navReset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>Disconnect</div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="padding: 24px;">
+                <button class="btn-cms btn-cms-outline" style="width:100%" id="btnCloseCms">Close Dashboard</button>
+            </div>
+        </aside>
+
+        <div class="dashboard-main">
+            <header class="topbar">
+                <div class="url-chip">
+                    <span id="cmsStatusDot" class="status-dot off"></span>
+                    <span id="cmsSiteUrl">Engine initialization...</span>
+                </div>
+                <span id="cmsActiveRepo" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;"></span>
+                <div style="flex:1"></div>
+                <button class="btn-cms btn-cms-outline" id="cmsToggleEdit">Activate CMS</button>
+                <button class="btn-cms btn-cms-primary" id="cmsSaveBtn" style="display:none">Save Changes</button>
+            </header>
+
+            <div style="flex:1; position:relative; display: flex; flex-direction: column;">
+                <iframe id="cmsPreviewFrame" src="about:blank" style="flex:1; width:100%; border:none;" allow="cross-origin-isolated"></iframe>
+                
+                <!-- TERMINAL OVERLAY -->
+                <div id="cmsTerminal" class="cms-terminal">
+                   <div class="terminal-header" id="terminalHeader">
+                       <div style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:11px; opacity:0.8;">
+                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Terminal Logs
+                       </div>
+                       <div class="terminal-controls">
+                           <div class="terminal-control yellow" id="terminalMin"></div>
+                           <div class="terminal-control green" id="terminalMax"></div>
+                       </div>
+                   </div>
+                   <div class="terminal-body" id="terminalBody"></div>
+                </div>
+                
+                <div id="cmsStepLogin" class="onboarding-screen">
+                    <div class="onboarding-card">
+                        <div style="margin-bottom: 24px;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+                        </div>
+                        <h2>Connect to GitHub</h2>
+                        <p>Sign in to your GitHub account to access and edit your repositories directly.</p>
+                        <button class="btn-cms btn-cms-primary" id="cmsLoginBtn" style="padding: 12px 30px; font-size: 1rem;">Continue with GitHub</button>
+                    </div>
+                </div>
+
+                <div id="cmsStepPicker" class="onboarding-screen hidden">
+                    <div class="onboarding-card" style="max-width: 500px; width: 100%;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h2 style="margin:0">Select Repository</h2>
+                            <a href="https://github.com/apps" target="_blank" class="btn-cms btn-cms-outline" style="font-size: 0.75rem; padding: 6px 12px; display:inline-flex; align-items:center; gap:6px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+                                Install App
+                            </a>
+                        </div>
+                        <p>Choose the repository that contains the source code for this website.</p>
+                        <div id="cmsRepoLoader" class="loader hidden"></div>
+                        <div id="cmsRepoList" class="repo-list"></div>
+                        <button class="btn-cms btn-cms-outline" style="margin-top:20px; width:100%" id="cmsBackToLogin">Back to Login</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="toast" id="cmsToast"></div>
+
     <script type="module">
-        import cms from './cms.js';
+        import { WebContainerGitService } from './WebContainerGitService.js';
+        import cms from './cms.js'; // The visual editor bridge
         
-        // Hide local admin bar if in dashboard iframe
-        if (window.self !== window.top) {
-            document.getElementById('localAdminBar').style.display = 'none';
+        const ui = {
+            dashboard: document.getElementById('cmsDashboard'),
+            landingProject: document.getElementById('cmsLandingProject'),
+            landingRepoName: document.getElementById('landingRepoName'),
+            btnLandingSwitch: document.getElementById('btnLandingSwitch'),
+            btnToggle: document.getElementById('toggleCmsBtn'),
+            btnPublish: document.getElementById('publishSync'),
+            btnClose: document.getElementById('btnCloseCms'),
+            statusText: document.querySelector('.admin-bar span strong'),
+            counter: document.getElementById('cmsCounter'),
+            preview: document.getElementById('cmsPreviewFrame'),
+            siteUrl: document.getElementById('cmsSiteUrl'),
+            repoDisplay: document.getElementById('cmsActiveRepo'),
+            stepLogin: document.getElementById('cmsStepLogin'),
+            stepPicker: document.getElementById('cmsStepPicker'),
+            repoList: document.getElementById('cmsRepoList'),
+            repoLoader: document.getElementById('cmsRepoLoader'),
+            loginBtn: document.getElementById('cmsLoginBtn'),
+            saveBtn: document.getElementById('cmsSaveBtn'),
+            toggleEditBtn: document.getElementById('cmsToggleEdit'),
+            backToLoginBtn: document.getElementById('cmsBackToLogin'),
+            navSwitchRepo: document.getElementById('navSwitchRepo'),
+            navTerminal: document.getElementById('navTerminal'),
+            terminal: document.getElementById('cmsTerminal'),
+            terminalBody: document.getElementById('terminalBody'),
+            terminalHeader: document.getElementById('terminalHeader'),
+            terminalMin: document.getElementById('terminalMin'),
+            terminalMax: document.getElementById('terminalMax'),
+            toast: document.getElementById('cmsToast')
+        };
+
+        let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
+        let cmsActive = false;
+        let cmsService = null;
+        let preWarmPromise = null;
+        let changes = {};
+        let entries = [];
+
+        // 0. UI REFRESH: Project Awareness
+        function refreshLandingUI() {
+            if (settings.token) {
+                ui.landingProject.classList.remove('hidden');
+                ui.landingRepoName.textContent = settings.repo || 'No repository selected';
+                ui.btnToggle.textContent = settings.repo ? 'Open Dashboard' : 'Open Repo Picker';
+            } else {
+                ui.landingProject.classList.add('hidden');
+            }
+        }
+        refreshLandingUI();
+
+        // 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo
+        const preWarmingService = new WebContainerGitService();
+        if (settings.repo && settings.token) {
+            console.log('[Quantum] Starting background pre-warm for:', settings.repo);
+            preWarmPromise = preWarmingService.initWebContainer()
+                .then(() => {
+                    preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
+                    preWarmingService.token = settings.token;
+                    return preWarmingService.boot(localStorage.getItem('zcms-manual-command'));
+                })
+                .catch(e => console.error('Pre-warm failed:', e));
+        } else {
+            preWarmPromise = preWarmingService.initWebContainer();
         }
 
-        const btn = document.getElementById('toggleCms');
-        const pubBtn = document.getElementById('publishSync');
-        const status = document.querySelector('.admin-bar span strong');
-        const counter = document.getElementById('cmsCounter');
-
-        let isActive = false;
-
-        counter.addEventListener('click', () => cms.showDiff());
-
-        window.addEventListener('cms-changed', (e) => {
-            const count = Object.keys(e.detail).length;
-            counter.textContent = `${count} Changes saved`;
-            counter.style.display = count > 0 ? 'inline' : 'none';
-            pubBtn.style.display = count > 0 ? 'inline' : 'none';
-        });
-
-        pubBtn.addEventListener('click', () => {
-            const repo = prompt('Enter GitHub Repo (user/repo):');
-            const token = prompt('Enter GitHub Personal Access Token (PAT):');
-            if (repo && token) {
-                alert('GitHub Sync: This would now commit ' + Object.keys(cms.changes).length + ' changes to ' + repo);
+        // 2. DASHBOARD UI CONTROLS
+        ui.btnToggle.onclick = () => {
+            ui.dashboard.style.display = 'flex';
+            if (settings.repo && settings.token) {
+                ui.stepLogin.classList.add('hidden');
+                ui.stepPicker.classList.add('hidden');
+                startCmsEngine(settings.repo, settings.token);
+            } else if (settings.token) {
+                ui.stepLogin.classList.add('hidden');
+                ui.stepPicker.classList.remove('hidden');
+                fetchRepos();
             }
-        });
+        };
 
-        btn.addEventListener('click', () => {
-            isActive = !isActive;
-            if (isActive) {
-                cms.enable();
-                status.textContent = 'On';
-                status.style.color = '#2ecc71';
-                btn.textContent = 'Disable CMS';
-                btn.style.background = '#e74c3c';
+        ui.btnLandingSwitch.onclick = () => {
+            ui.dashboard.style.display = 'flex';
+            ui.stepLogin.classList.add('hidden');
+            ui.stepPicker.classList.remove('hidden');
+            fetchRepos();
+        };
+
+        ui.navSwitchRepo.onclick = () => {
+            ui.stepPicker.classList.remove('hidden');
+            fetchRepos();
+        };
+
+        ui.btnClose.onclick = () => {
+            ui.dashboard.style.display = 'none';
+        };
+
+        ui.loginBtn.onclick = () => window.location.href = '/github/login';
+        
+        ui.backToLoginBtn.onclick = () => {
+            ui.stepPicker.classList.add('hidden');
+            ui.stepLogin.classList.remove('hidden');
+        };
+
+        // History diff
+        ui.counter.onclick = () => cms.showDiff();
+
+        ui.navTerminal.onclick = () => {
+            ui.terminal.classList.toggle('expanded');
+        };
+
+        ui.terminalMin.onclick = (e) => {
+            e.stopPropagation();
+            ui.terminal.classList.remove('expanded', 'maximized');
+        };
+
+        ui.terminalMax.onclick = (e) => {
+            e.stopPropagation();
+            ui.terminal.classList.toggle('maximized');
+        };
+
+        ui.terminalHeader.onclick = () => {
+            if (!ui.terminal.classList.contains('expanded')) {
+                ui.terminal.classList.add('expanded');
+            } else if (ui.terminal.classList.contains('maximized')) {
+                ui.terminal.classList.remove('maximized');
             } else {
-                cms.disable();
-                status.textContent = 'Off';
-                status.style.color = 'inherit';
-                btn.textContent = 'Enable CMS';
-                btn.style.background = 'var(--primary)';
+                ui.terminal.classList.remove('expanded');
             }
-        });
+        };
+
+        // Ported logic from admin.html
+        async function startCmsEngine(repo, token) {
+            ui.repoDisplay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${repo}`;
+            cmsService = preWarmingService;
+            
+            cmsService.onLog = (msg) => {
+                const line = document.createElement('div');
+                line.textContent = msg;
+                ui.terminalBody.appendChild(line);
+                ui.terminalBody.scrollTop = ui.terminalBody.scrollHeight;
+                if (msg.toLowerCase().includes('error')) showToast('Error in engine logs', 'error');
+            };
+
+            cmsService.onStatusChange = (msg) => {
+                showToast(msg, 'info');
+                const line = document.createElement('div');
+                line.innerHTML = `<span style="color:var(--primary)">[Status] ${msg}</span>`;
+                ui.terminalBody.appendChild(line);
+                ui.terminalBody.scrollTop = ui.terminalBody.scrollHeight;
+            };
+
+            cmsService.onServerReady = (url) => {
+                ui.preview.src = url;
+                ui.siteUrl.textContent = url;
+                showToast('Environment ready!', 'success');
+            };
+
+            // If already pre-warmed, ensure UI shows the URL immediately
+            if (cmsService.serverUrl) {
+                ui.preview.src = cmsService.serverUrl;
+                ui.siteUrl.textContent = cmsService.serverUrl;
+                ui.statusDot.className = 'status-dot';
+                return;
+            }
+
+            // Await background pre-warm if active
+            if (preWarmPromise) {
+                showToast('Synchronizing engine...', 'info');
+                await preWarmPromise;
+            }
+            
+            // If the pre-warm didn't have a repo yet, we need to boot now
+            if (!cmsService.serverUrl && !cmsService.isBooting) {
+                cmsService.repoUrl = `https://github.com/${repo}`;
+                cmsService.token = token;
+                await cmsService.boot(localStorage.getItem('zcms-manual-command'));
+            } else if (cmsService.serverUrl) {
+                ui.preview.src = cmsService.serverUrl;
+                ui.siteUrl.textContent = cmsService.serverUrl;
+            }
+        }
+
+        async function fetchRepos() {
+            ui.repoLoader.classList.remove('hidden');
+            ui.repoList.innerHTML = '';
+            try {
+                const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=50&visibility=all', {
+                    headers: { Authorization: `token ${settings.token}` }
+                });
+                const repos = await res.json();
+                repos.forEach(repo => {
+                    const item = document.createElement('div');
+                    item.className = 'repo-item';
+                    item.onclick = () => selectRepo(repo.full_name);
+                    item.innerHTML = `<div><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
+                    ui.repoList.appendChild(item);
+                });
+            } catch (e) { showToast(e.message, 'error'); }
+            finally { ui.repoLoader.classList.add('hidden'); }
+        }
+
+        function selectRepo(name) {
+            settings.repo = name;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            ui.stepPicker.classList.add('hidden');
+            refreshLandingUI();
+            startCmsEngine(name, settings.token);
+        }
+
+        function showToast(msg, type) {
+            if (!ui.toast) return;
+            ui.toast.textContent = msg;
+            ui.toast.className = `toast ${type} show`;
+            setTimeout(() => ui.toast.classList.remove('show'), 3000);
+        }
+
+        // Visual Editor Sync
+        ui.toggleEditBtn.onclick = () => {
+            cmsActive = !cmsActive;
+            ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: cmsActive }, '*');
+            ui.toggleEditBtn.textContent = cmsActive ? 'Disable Editor' : 'Enable Editor';
+        };
+
+        window.onmessage = (e) => {
+            if (e.data.type === 'CMS_CHANGED') {
+                changes = e.data.changes;
+                entries = e.data.entries || [];
+                const count = Object.keys(changes).length;
+                ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+                ui.counter.textContent = `${count} Changes saved`;
+                ui.counter.style.display = count > 0 ? 'inline' : 'none';
+                ui.btnPublish.style.display = count > 0 ? 'inline' : 'none';
+            }
+        };
+
+        ui.saveBtn.onclick = async () => {
+             if (!cmsService) return;
+             try {
+                showToast('Syncing to GitHub...', 'info');
+                await cmsService.publishChanges('Visual update via ZeroCMS');
+                showToast('Changes published!', 'success');
+                ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
+             } catch (e) { showToast(e.message, 'error'); }
+        };
+
+        // Check for token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+            settings.token = urlToken;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            window.history.replaceState({}, document.title, window.location.pathname);
+            ui.btnToggle.click();
+            if (!settings.repo) {
+                ui.stepLogin.classList.add('hidden');
+                ui.stepPicker.classList.remove('hidden');
+                fetchRepos();
+            }
+        }
     </script>
 </body>
 </html>
