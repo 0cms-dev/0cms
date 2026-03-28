@@ -93,8 +93,8 @@ const server = http.createServer((req, res) => {
       gitRes.on('end', () => {
         const tokenData = JSON.parse(body);
         if (tokenData.access_token) {
-          // Redirect back to admin with the token
-          res.writeHead(302, { Location: `/admin.html?token=${tokenData.access_token}` });
+          // Redirect back to index with the token
+          res.writeHead(302, { Location: `/index.html?token=${tokenData.access_token}` });
           res.end();
         } else {
           res.writeHead(500);

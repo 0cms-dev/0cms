@@ -503,6 +503,7 @@
             terminalHeader: document.getElementById('terminalHeader'),
             terminalMin: document.getElementById('terminalMin'),
             terminalMax: document.getElementById('terminalMax'),
+            navReset: document.getElementById('navReset'),
             toast: document.getElementById('cmsToast')
         };
 
@@ -584,6 +585,13 @@
             ui.terminal.classList.toggle('expanded');
         };
 
+        ui.navReset.onclick = () => {
+            if (confirm('Disconnect from GitHub and clear settings?')) {
+                localStorage.removeItem('zcms-settings');
+                window.location.reload();
+            }
+        };
+
         ui.terminalMin.onclick = (e) => {
             e.stopPropagation();
             ui.terminal.classList.remove('expanded', 'maximized');
@@ -660,10 +668,31 @@
             ui.repoLoader.classList.remove('hidden');
             ui.repoList.innerHTML = '';
             try {
-                const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=50&visibility=all', {
+                const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
                     headers: { Authorization: `token ${settings.token}` }
                 });
                 const repos = await res.json();
+                
+                if (!Array.isArray(repos)) {
+                    const errorMsg = repos.message || 'Failed to fetch repositories. Please check your GitHub connection.';
+                    showToast(errorMsg, 'error');
+                    if (res.status === 401) {
+                        // Token invalid, go back to login
+                        setTimeout(() => {
+                           settings.token = null;
+                           localStorage.setItem('zcms-settings', JSON.stringify(settings));
+                           ui.stepPicker.classList.add('hidden');
+                           ui.stepLogin.classList.remove('hidden');
+                        }, 2000);
+                    }
+                    return;
+                }
+
+                if (repos.length === 0) {
+                    ui.repoList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted)">No repositories found. Ensure the GitHub App is installed.</div>';
+                    return;
+                }
+
                 repos.forEach(repo => {
                     const item = document.createElement('div');
                     item.className = 'repo-item';
@@ -671,8 +700,11 @@
                     item.innerHTML = `<div><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
                     ui.repoList.appendChild(item);
                 });
-            } catch (e) { showToast(e.message, 'error'); }
-            finally { ui.repoLoader.classList.add('hidden'); }
+            } catch (e) { 
+                showToast(e.message, 'error'); 
+            } finally { 
+                ui.repoLoader.classList.add('hidden'); 
+            }
         }
 
         function selectRepo(name) {
