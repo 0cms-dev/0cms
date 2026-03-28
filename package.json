@@ -8,5 +8,14 @@
     "dev": "node serve.js"
   },
   "author": "ZeroCMS Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.2",
+    "@webcontainer/api": "^1.6.1",
+    "buffer": "^6.0.3",
+    "isomorphic-git": "^1.37.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.4"
+  }
 }

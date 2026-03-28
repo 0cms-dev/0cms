@@ -6,6 +6,12 @@
     <title>Zero-Config CMS | Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- NITRO PRELOAD: Ultra-fast library loading -->
+    <link rel="modulepreload" href="/WebContainerGitService.js">
+    <link rel="modulepreload" href="/lib/isomorphic-git.js">
+    <link rel="modulepreload" href="/lib/webcontainer-api.js">
+    <link rel="modulepreload" href="/lib/lightning-fs.js">
     <style>
         :root {
             --primary: #6366f1;
@@ -170,6 +176,9 @@
                 <div style="font-size: 0.7rem; font-weight: 700; color: #e67e22; text-transform: uppercase;">Advanced: Auto-Cleanup</div>
                 <button class="btn" style="width: 100%; background: #e67e22; color: white;" onclick="rollbackLastCommit()">Rollback Last Commit</button>
                 <button class="btn btn-outline" style="width: 100%; margin-top:8px; border-color:#e74c3c; color:#e74c3c" onclick="clearAll()">Reset All Edits</button>
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
+                <div style="font-size: 0.7rem; font-weight: 700; color: #c0392b; text-transform: uppercase;">Troubleshooting</div>
+                <button class="btn" style="width: 100%; background: #c0392b; color: white;" onclick="factoryReset()">Factory Reset (Wipe & Re-clone)</button>
             </div>
         </div>
             <div id="stepLogin" class="onboarding-screen">
@@ -230,8 +239,11 @@
     let entries = []; // Track full entry metadata
     let cmsActive = false;
     let cmsService = null;
-    let syncTimeout = null;
     let lastSynced = {}; // Track what we've already written to GC
+
+    // PRE-WARMING: Start booting the engine BEFORE the user picks a repo
+    const preWarmingService = new WebContainerGitService();
+    let preWarmPromise = preWarmingService.initWebContainer().catch(e => console.error('Pre-warm error:', e));
 
     function init() {
         // Essential check for WebContainer/SharedArrayBuffer support
@@ -312,29 +324,38 @@
         consoleEl.style.display = 'block';
         consoleEl.innerHTML = '<div style="color: #6a9955; margin-bottom: 5px;">// Starting WebContainer Environment...</div>';
 
-        cmsService = new WebContainerGitService({
-            repoUrl: `https://github.com/${repo}.git`,
-            token: token,
-            onStatusChange: (msg) => {
-                showToast(msg, 'info');
-                const log = document.createElement('div');
-                log.style.color = '#569cd6';
-                log.textContent = `> ${msg}`;
-                consoleEl.appendChild(log);
-                consoleEl.scrollTop = consoleEl.scrollHeight;
-            },
-            onLog: (msg) => {
-                const log = document.createElement('div');
-                log.textContent = msg;
-                consoleEl.appendChild(log);
-                consoleEl.scrollTop = consoleEl.scrollHeight;
-            },
-            onServerReady: (url) => {
-                frame.src = url;
-                document.getElementById('siteUrl').textContent = url;
-                showToast('Website ready!', 'success');
-            }
-        });
+        // Re-use the pre-warmed service
+        cmsService = preWarmingService;
+        cmsService.repoUrl = `https://github.com/${repo}`;
+        cmsService.token = token;
+        
+        // Update listeners for the actual active session
+        cmsService.onStatusChange = (msg) => {
+            showToast(msg, 'info');
+            const log = document.createElement('div');
+            log.style.color = '#569cd6';
+            log.textContent = `> ${msg}`;
+            consoleEl.appendChild(log);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        };
+
+        cmsService.onLog = (msg) => {
+            const log = document.createElement('div');
+            log.style.color = '#ce9178';
+            log.textContent = msg;
+            consoleEl.appendChild(log);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        };
+
+        cmsService.onServerReady = (url) => {
+            frame.src = url;
+            document.getElementById('siteUrl').textContent = url;
+            showToast('Website ready!', 'success');
+        };
+        
+        // Wait for pre-warming to complete if it hasn't already
+        showToast('Warming up engine...', 'info');
+        await preWarmPromise;
         
         const manualCmd = localStorage.getItem('zcms-manual-command') || null;
         await cmsService.boot(manualCmd).catch(e => {
@@ -478,6 +499,23 @@
         entries = [];
         updateUI();
         frame.contentWindow.postMessage({ type: 'CMS_CLEAR' }, '*');
+    };
+
+    window.factoryReset = async function() {
+        if (!confirm('EXTREME WARNING: This will delete ALL local files and node_modules from your browser. We will have to re-clone and re-install everything (slow). Continue?')) return;
+        
+        try {
+            showToast('Wiping local storage...', 'info');
+            if (cmsService) {
+                await cmsService.initFS(); // The new initFS doesn't wipe, but we can call wipeDir explicitly
+                await cmsService.wipeDir(cmsService.dir);
+            }
+            localStorage.removeItem('zcms-manual-command');
+            showToast('Reset successful! Reloading...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } catch (e) {
+            showToast(`Reset failed: ${e.message}`, 'error');
+        }
     };
 </script>
 </body>

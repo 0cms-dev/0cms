@@ -140,6 +140,12 @@ const server = http.createServer((req, res) => {
 
   let filePath = '.' + req.url.split('?')[0];
   if (filePath === './') filePath = './index.html';
+  
+  // High-Performance Library Serving
+  if (req.url.startsWith('/lib/')) {
+    filePath = '.' + req.url;
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
 
   const extname = String(path.extname(filePath)).toLowerCase();
   const contentType = MIME_TYPES[extname] || 'application/octet-stream';

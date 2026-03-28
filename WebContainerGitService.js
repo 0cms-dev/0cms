@@ -1,6 +1,6 @@
-import git from 'https://esm.sh/isomorphic-git';
-import FS from 'https://esm.sh/@isomorphic-git/lightning-fs';
-import { WebContainer } from 'https://esm.sh/@webcontainer/api';
+import git from '/lib/isomorphic-git.js';
+import FS from '/lib/lightning-fs.js';
+import { WebContainer } from '/lib/webcontainer-api.js';
 
 /**
  * WebContainerGitService
@@ -30,18 +30,18 @@ export class WebContainerGitService {
   async boot(manualCommand = null) {
     try {
       this.onStatusChange('Initializing FileSystem...');
-      await this.initFS();
+      const fsExists = await this.fs.readdir(this.dir).then(e => e.length > 0).catch(() => false);
       
-      this.onStatusChange('Cloning Repository...');
-      await this.clone();
-      
-      this.onStatusChange('Booting WebContainer...');
-      await this.initWebContainer();
-      
+      // Start WebContainer and Git Fetching in Parallel
+      const [container, gitResult] = await Promise.all([
+        this.initWebContainer(),
+        this.fetchOrClone()
+      ]);
+
       this.onStatusChange('Syncing Files...');
       await this.syncToWebContainer();
       
-      this.onStatusChange('Installing Dependencies...');
+      this.onStatusChange('Preparing Environment...');
       await this.installDependencies();
       
       this.onStatusChange('Starting Dev Server...');
@@ -55,14 +55,34 @@ export class WebContainerGitService {
   }
 
   async initFS() {
-    // Attempt to wipe directory for a clean start
+    // Only create directory if it doesn't exist
+    await this.fs.mkdir(this.dir).catch(() => {});
+  }
+
+  async fetchOrClone() {
     try {
-      await this.wipeDir(this.dir);
-      await this.fs.rmdir(this.dir); // Also remove the root dir itself
+      const isGit = await this.fs.readdir(`${this.dir}/.git`).then(() => true).catch(() => false);
+      if (isGit) {
+        this.onStatusChange('Pulling latest changes...');
+        return await git.pull({
+          fs: this.fs,
+          http: (await import('/lib/isomorphic-git-http.js')).default,
+          dir: this.dir,
+          url: this.repoUrl,
+          corsProxy: this.proxy,
+          onAuth: () => ({ username: this.token }),
+          singleBranch: true,
+          fastForwardOnly: true,
+          author: { name: 'CMS Sync', email: 'cms@example.com' }
+        });
+      } else {
+        this.onStatusChange('Cloning Repository...');
+        return await this.clone();
+      }
     } catch (e) {
-      // Ignored if it doesn't exist
+      console.error('[CMS] Git Fetch Error:', e);
+      throw new Error(`Git sync failed: ${e.message}. Is your token correct?`);
     }
-    await this.fs.mkdir(this.dir);
   }
 
   async wipeDir(dir) {
@@ -84,16 +104,22 @@ export class WebContainerGitService {
   }
 
   async clone() {
-    await git.clone({
-      fs: this.fs,
-      http: (await import('https://esm.sh/isomorphic-git/http/web/index.js')).default,
-      dir: this.dir,
-      url: this.repoUrl,
-      corsProxy: this.proxy,
-      singleBranch: true,
-      depth: 1,
-      onMessage: msg => this.onStatusChange(`Git: ${msg}`)
-    });
+    try {
+      await git.clone({
+        fs: this.fs,
+        http: (await import('/lib/isomorphic-git-http.js')).default,
+        dir: this.dir,
+        url: this.repoUrl,
+        corsProxy: this.proxy,
+        onAuth: () => ({ username: this.token }),
+        singleBranch: true,
+        depth: 1,
+        onMessage: msg => this.onStatusChange(`Git: ${msg}`)
+      });
+    } catch (e) {
+      console.error('[CMS] Git Clone Error:', e);
+      throw new Error(`Git clone failed: ${e.message}. Check your repo name and token.`);
+    }
   }
 
   async initWebContainer() {
@@ -107,16 +133,27 @@ export class WebContainerGitService {
    */
   async syncToWebContainer() {
     const files = await this.readDirRecursive(this.dir);
+    
+    // 1. Create all directories first (sequential to ensure order)
     for (const file of files) {
-      const relativePath = file.path.replace(this.dir, '');
       if (file.type === 'dir') {
-        await this.webcontainerInstance.fs.mkdir(relativePath, { recursive: true });
-      } else {
-        // Read as Uint8Array (binary safe)
-        const content = await this.fs.readFile(file.path);
-        await this.webcontainerInstance.fs.writeFile(relativePath, content);
+        const relativePath = file.path.replace(this.dir, '');
+        if (relativePath) {
+          await this.webcontainerInstance.fs.mkdir(relativePath, { recursive: true });
+        }
       }
     }
+    
+    // 2. Write all files in parallel
+    const fileWrites = files
+      .filter(f => f.type === 'file')
+      .map(async (file) => {
+        const relativePath = file.path.replace(this.dir, '');
+        const content = await this.fs.readFile(file.path);
+        return this.webcontainerInstance.fs.writeFile(relativePath, content);
+      });
+      
+    await Promise.all(fileWrites);
     await this.startMiddleware();
   }
 
@@ -258,6 +295,15 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
   }
 
   async installDependencies() {
+    // PRO-TIP: Check if node_modules already exists from a previous sync
+    // This makes repeat-boots extremely fast.
+    const hasModules = await this.webcontainerInstance.fs.readdir('/node_modules').then(e => e.length > 0).catch(() => false);
+    if (hasModules) {
+      this.onLog('Reuse existing node_modules detected.');
+      return;
+    }
+    
+    this.onStatusChange('Installing Dependencies...');
     const installProcess = await this.webcontainerInstance.spawn('npm', ['install']);
     
     // Log output for debugging
