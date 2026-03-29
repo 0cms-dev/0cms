@@ -39,6 +39,30 @@ class ZeroConfigCMS {
           // Re-apply all remaining saved changes from a clean state
           location.reload();
         }
+        if (e.data.type === 'CMS_GET_SEO') {
+            const titleEl = document.querySelector('title');
+            const descEl = document.querySelector('meta[name="description"]');
+            window.parent.postMessage({
+                type: 'CMS_SEO_DATA',
+                title: titleEl ? titleEl.innerText : '',
+                description: descEl ? descEl.getAttribute('content') : ''
+            }, '*');
+        }
+        if (e.data.type === 'CMS_SET_SEO') {
+            const titleEl = document.querySelector('title');
+            if (titleEl && e.data.title !== titleEl.innerText) {
+                if (!titleEl.dataset.cmsOriginal) titleEl.dataset.cmsOriginal = titleEl.innerText;
+                titleEl.innerText = e.data.title;
+                this.saveChange(this.getSelector(titleEl), e.data.title);
+            }
+            
+            const descEl = document.querySelector('meta[name="description"]');
+            if (descEl && e.data.description !== descEl.getAttribute('content')) {
+                if (!descEl.dataset.cmsOriginal) descEl.dataset.cmsOriginal = descEl.getAttribute('content');
+                descEl.setAttribute('content', e.data.description);
+                this.saveChange(this.getSelector(descEl), e.data.description);
+            }
+        }
       });
       // Initial notification of existing changes
       this.notifyParent();
@@ -59,12 +83,21 @@ class ZeroConfigCMS {
         try {
           const el = document.querySelector(sel);
           const sourceFile = el ? (el.dataset.cmsSource || el.getAttribute('data-astro-source-file') || document.body.dataset.cmsSource) : null;
+          let type = 'unknown';
+          let original = null;
+          if (el) {
+              if (el.tagName === 'IMG') type = 'image';
+              else if (el.tagName === 'META') type = 'meta';
+              else if (el.tagName === 'TITLE') type = 'title';
+              else type = 'text';
+              original = el.dataset.cmsOriginal;
+          }
           return {
             selector: sel,
             updated: val,
-            original: el ? el.dataset.cmsOriginal : null,
+            original: original,
             sourceFile: sourceFile,
-            type: el ? (el.tagName === 'IMG' ? 'image' : 'text') : 'unknown'
+            type: type
           };
         } catch (e) { return null; }
       }).filter(Boolean);
@@ -236,6 +269,14 @@ class ZeroConfigCMS {
 
   getSelector(el) {
     if (el.id) return `#${el.id}`;
+    if (el.tagName === 'META') {
+        const name = el.getAttribute('name');
+        const prop = el.getAttribute('property');
+        if (name) return `meta[name="${name}"]`;
+        if (prop) return `meta[property="${prop}"]`;
+    }
+    if (el.tagName === 'TITLE') return 'title';
+
     const path = [];
     while (el.nodeType === Node.ELEMENT_NODE) {
       let selector = el.nodeName.toLowerCase();
@@ -262,8 +303,9 @@ class ZeroConfigCMS {
     for (const [selector, content] of Object.entries(this.changes)) {
       const el = document.querySelector(selector);
       if (el) {
-        if (!el.dataset.cmsOriginal) el.dataset.cmsOriginal = el.tagName === 'IMG' ? el.src : el.innerText;
+        if (!el.dataset.cmsOriginal) el.dataset.cmsOriginal = el.tagName === 'IMG' ? el.src : (el.tagName === 'META' ? el.getAttribute('content') : el.innerText);
         if (el.tagName === 'IMG') el.src = content;
+        else if (el.tagName === 'META') el.setAttribute('content', content);
         else el.innerText = content;
       }
     }

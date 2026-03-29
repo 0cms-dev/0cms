@@ -1,7 +1,6 @@
 import git from '/lib/isomorphic-git.js';
 import FS from '/lib/lightning-fs.js';
 import { WebContainer } from '/lib/webcontainer-api.js';
-
 /**
  * WebContainerGitService
  * Orchestrates Git operations in browser-persistent storage and 
@@ -586,6 +585,72 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     }
     
     this.onLog(`[Warning] SmartMatch failed to find original text in any source files.`);
+  }
+
+  /**
+   * ZERO CONFIG CONTENT CREATION
+   * Automatically detect where to put new pages based on the framework
+   */
+  async createNewPage(title) {
+    const slug = title.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').replace(/(^-|-$)/g, '');
+    const date = new Date().toISOString().split('T')[0];
+    const frontmatter = `---\ntitle: "${title}"\ndate: "${date}"\n---\n\nStart writing your content here...\n`;
+    
+    const checkDir = async (p) => {
+      try { await this.webcontainerInstance.fs.readdir(p); return true; } catch(e) { return false; }
+    };
+    
+    let targetPath = null;
+    const paths = [
+      '/src/content/blog',
+      '/src/pages/blog',
+      '/source/_posts',
+      '/content/posts',
+      '/src/pages'
+    ];
+
+    for (const p of paths) {
+      if (await checkDir(p)) {
+        targetPath = `${p}/${slug}.md`;
+        break;
+      }
+    }
+    
+    // Fallback if no specific content dir found
+    if (!targetPath) {
+      if (await checkDir('/src/pages')) targetPath = `/src/pages/${slug}.md`;
+      else targetPath = `/${slug}.md`; 
+    }
+    
+    // Create necessary directories in WebContainer
+    const dir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+    const ensureContainerDir = async (pathStr) => {
+      const parts = pathStr.split('/').filter(Boolean);
+      let currentPath = '';
+      for (const part of parts) {
+        currentPath += '/' + part;
+        try { await this.webcontainerInstance.fs.mkdir(currentPath); } catch(e) {}
+      }
+    };
+    await ensureContainerDir(dir);
+    
+    // Create necessary directories in Lightning FS (Persistence)
+    const ensureLightningDir = async (pathStr) => {
+      const parts = pathStr.split('/').filter(Boolean);
+      let currentPath = this.dir;
+      for (const part of parts) {
+        currentPath += '/' + part;
+        try { await this.fs.mkdir(currentPath); } catch(e) {}
+      }
+    };
+    await ensureLightningDir(dir);
+    
+    // Write the files
+    await this.webcontainerInstance.fs.writeFile(targetPath, frontmatter);
+    await this.fs.writeFile(this.dir + targetPath, frontmatter);
+    
+    this.onLog(`[CMS] Created new page at ${targetPath}`);
+    return targetPath;
   }
 
   /**

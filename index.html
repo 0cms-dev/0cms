@@ -384,6 +384,18 @@
         .toast.success { background: #10b981; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
         .toast.error { background: #ef4444; box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3); }
 
+        /* BRANDING PILLS */
+        .btn-brand { display:flex; align-items:center; gap:6px; flex:1 1 calc(50% - 4px); justify-content:center; text-decoration:none; font-size: 0.8rem; padding: 10px 8px; border-radius: 8px; font-weight: 600; transition: transform 0.2s, opacity 0.2s; color: white !important; border:none; }
+        .btn-brand:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-vercel { background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-netlify { background: #00C7B7; text-shadow: 0 1px 2px rgba(0,0,0,0.1); box-shadow: 0 4px 10px rgba(0, 199, 183, 0.2); }
+        .btn-cloudflare { background: #F38020; box-shadow: 0 4px 10px rgba(243, 128, 32, 0.2); }
+        .btn-github { background: #24292e; box-shadow: 0 4px 10px rgba(36, 41, 46, 0.2); }
+        @media (prefers-color-scheme: dark) {
+            .btn-vercel { background: #fff; color: #000 !important; box-shadow: 0 4px 10px rgba(255,255,255,0.1); }
+            .btn-github { background: #fff; color: #000 !important; }
+        }
+
         /* SPONSORS */
         .sponsors-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; opacity: 0.4; filter: grayscale(1); transition: 0.3s; }
         .sponsors-grid:hover { opacity: 0.8; filter: grayscale(0); }
@@ -530,6 +542,21 @@
                 
                 <div class="dock-divider"></div>
 
+                <button class="dock-item" id="navNewPage" title="Create New Content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    New
+                </button>
+
+                <button class="dock-item" id="navSEO" title="Manage SEO Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg>
+                    SEO
+                </button>
+
+                <button class="dock-item" id="navHosting" title="Hosting & Live URL">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    Hosting
+                </button>
+
                 <button class="dock-item" id="navHistory" title="Unsaved Changes">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>
                     Changes
@@ -577,6 +604,57 @@
                        </div>
                    </div>
                    <div class="terminal-body" id="terminalBody"></div>
+                </div>
+
+                <!-- FLOATING SEO PANEL -->
+                <div id="cmsSEOPanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
+                        <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg> SEO Settings</span>
+                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsSEOPanel').style.display='none'">✕</button>
+                    </div>
+                    <div style="display:flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Page Title</label>
+                        <input type="text" id="seoTitle" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;" placeholder="e.g. My Website - Home">
+                    </div>
+                    <div style="display:flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Meta Description</label>
+                        <textarea id="seoDesc" rows="3" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; resize: none;" placeholder="Brief description for search engines"></textarea>
+                    </div>
+                    <button class="btn-cms btn-cms-primary" id="seoSaveBtn" style="width: 100%; justify-content: center; padding: 10px; font-size: 0.9rem; margin-top: 4px;">Apply to Preview</button>
+                </div>
+
+                <!-- FLOATING HOSTING PANEL -->
+                <div id="cmsHostingPanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
+                        <span style="display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg> Hosting Setup</span>
+                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsHostingPanel').style.display='none'">✕</button>
+                    </div>
+                    
+                    <div style="display:flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Live Website URL</label>
+                        <input type="text" id="hostingUrl" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;" placeholder="https://mywebsite.com">
+                    </div>
+
+                    <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+                        Not hosted yet? Deploy for free directly from your GitHub repository:
+                    </div>
+
+                    <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                        <a id="btnDeployVercel" target="_blank" class="btn-brand btn-vercel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L24 22H0Z"/></svg> Vercel
+                        </a>
+                        <a id="btnDeployNetlify" target="_blank" class="btn-brand btn-netlify">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="12" y="2" width="14" height="14" transform="rotate(45 12 2)" rx="2"/></svg> Netlify
+                        </a>
+                        <a id="btnDeployCloudflare" target="_blank" class="btn-brand btn-cloudflare">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 16.5A3.5 3.5 0 0 1 18.5 20H5.5A3.5 3.5 0 0 1 2 16.5C2 14.57 3.57 13 5.5 13H6c.55-3.34 3.4-5.5 6-5.5 3.14 0 5.6 2.36 5.92 5.5h.58a3.5 3.5 0 0 1 3.5 3.5z"/></svg> Cloudflare
+                        </a>
+                        <a id="btnDeployGitHub" target="_blank" class="btn-brand btn-github">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.53 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg> GitHub
+                        </a>
+                    </div>
+
+                    <button class="btn-cms btn-cms-primary" id="hostingSaveBtn" style="width: 100%; justify-content: center; padding: 10px; font-size: 0.9rem; margin-top: 4px;">Save Address</button>
                 </div>
                 
                 <div id="cmsStepLogin" class="onboarding-screen">
@@ -635,6 +713,20 @@
             saveBtn: document.getElementById('cmsSaveBtn'),
             backToLoginBtn: document.getElementById('cmsBackToLogin'),
             navHistory: document.getElementById('navHistory'),
+            navNewPage: document.getElementById('navNewPage'),
+            navSEO: document.getElementById('navSEO'),
+            seoPanel: document.getElementById('cmsSEOPanel'),
+            seoTitle: document.getElementById('seoTitle'),
+            seoDesc: document.getElementById('seoDesc'),
+            seoSaveBtn: document.getElementById('seoSaveBtn'),
+            navHosting: document.getElementById('navHosting'),
+            hostingPanel: document.getElementById('cmsHostingPanel'),
+            hostingUrl: document.getElementById('hostingUrl'),
+            btnDeployVercel: document.getElementById('btnDeployVercel'),
+            btnDeployNetlify: document.getElementById('btnDeployNetlify'),
+            btnDeployCloudflare: document.getElementById('btnDeployCloudflare'),
+            btnDeployGitHub: document.getElementById('btnDeployGitHub'),
+            hostingSaveBtn: document.getElementById('hostingSaveBtn'),
             navTerminal: document.getElementById('navTerminal'),
             devModeToggle: document.getElementById('devModeToggle'),
             terminal: document.getElementById('cmsTerminal'),
@@ -747,6 +839,57 @@
 
         // History diff
         ui.counter.onclick = () => cms.showDiff();
+        
+        ui.navNewPage.onclick = async () => {
+            const title = prompt('Titel für die neue Seite eingeben:');
+            if (title && cmsService) {
+                try {
+                    const path = await cmsService.createNewPage(title);
+                    showToast(`Created: ${path}`, 'success');
+                    // Give Dev Server time to process the file and trigger build
+                    setTimeout(() => {
+                        let urlPath = path.replace('/src/pages', '').replace('/src/content', '').replace('/source', '').replace('.md', '').replace('/index', '');
+                        if (urlPath === '') urlPath = '/';
+                        ui.preview.src = cmsService.serverUrl + urlPath;
+                    }, 1800);
+                } catch (e) {
+                    showToast('Error creating page', 'error');
+                }
+            }
+        };
+
+        ui.navSEO.onclick = () => {
+            const isVisible = ui.seoPanel.style.display === 'flex';
+            if (isVisible) {
+                ui.seoPanel.style.display = 'none';
+            } else {
+                ui.seoPanel.style.display = 'flex';
+                // Fetch current SEO tags from the iframe
+                ui.preview.contentWindow.postMessage({ type: 'CMS_GET_SEO' }, '*');
+            }
+        };
+        
+        ui.seoSaveBtn.onclick = () => {
+            ui.preview.contentWindow.postMessage({
+                type: 'CMS_SET_SEO',
+                title: ui.seoTitle.value,
+                description: ui.seoDesc.value
+            }, '*');
+            ui.seoPanel.style.display = 'none';
+            showToast('SEO settings applied successfully', 'success');
+        };
+
+        // Window Event Listener for generic postMessages from iframe
+        window.addEventListener('message', (e) => {
+            if (e.data.type === 'CMS_SEO_DATA') {
+                ui.seoTitle.value = e.data.title || '';
+                ui.seoDesc.value = e.data.description || '';
+            }
+            // Existing ones are handled in cms.js globally, but we intercept SEO here
+            if (e.data.type === 'CMS_READY') {
+                // ...
+            }
+        });
 
         ui.navTerminal.onclick = () => {
             ui.terminal.classList.toggle('expanded');
@@ -986,21 +1129,51 @@
         // Developer Mode Logic
         const refreshDevMode = () => {
              const isDev = settings.devMode || false;
+             
+             // Developer-only UI elements
              ui.navTerminal.style.display = isDev ? 'flex' : 'none';
+             ui.navHosting.style.display = isDev ? 'flex' : 'none';
+             
              if (!isDev) {
                  ui.terminal.classList.remove('expanded', 'maximized', 'visible');
+                 if (ui.hostingPanel && ui.hostingPanel.style.display === 'flex') {
+                     ui.hostingPanel.style.display = 'none';
+                 }
              } else {
                  ui.terminal.classList.add('visible');
              }
-             ui.devModeToggle.checked = isDev;
+             
+             if (ui.devModeToggle) ui.devModeToggle.checked = isDev;
              if (cmsService) cmsService.isDevMode = isDev; 
         };
 
-        ui.devModeToggle.onchange = (e) => {
-            settings.devMode = e.target.checked;
-            localStorage.setItem('zcms-settings', JSON.stringify(settings));
-            refreshDevMode();
+        if (ui.devModeToggle) {
+            ui.devModeToggle.onchange = (e) => {
+                settings.devMode = e.target.checked;
+                localStorage.setItem('zcms-settings', JSON.stringify(settings));
+                refreshDevMode();
+                showToast(settings.devMode ? 'Developer Mode Enabled' : 'Editor Mode Enabled', 'info');
+            };
+        }
+
+        // Secret Developer Mode Toggle
+        const toggleSecretDevMode = () => {
+             settings.devMode = !settings.devMode;
+             localStorage.setItem('zcms-settings', JSON.stringify(settings));
+             refreshDevMode();
+             showToast(settings.devMode ? 'Developer Mode Enabled' : 'Editor Mode Enabled', 'success');
         };
+
+        // Trigger: Double click on the URL chip
+        const urlChip = document.querySelector('.url-chip');
+        if (urlChip) {
+            urlChip.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                toggleSecretDevMode();
+            });
+            urlChip.style.cursor = 'pointer';
+            urlChip.title = 'Double-click to toggle Developer Mode';
+        }
 
         refreshDevMode();
 
@@ -1016,14 +1189,69 @@
         ui.navBack.onclick = () => ui.preview.contentWindow.history.back();
         ui.navForward.onclick = () => ui.preview.contentWindow.history.forward();
 
+        // Hosting Logic
+        ui.navHosting.onclick = () => {
+            const isVisible = ui.hostingPanel.style.display === 'flex';
+            if (isVisible) {
+                ui.hostingPanel.style.display = 'none';
+            } else {
+                ui.hostingPanel.style.display = 'flex';
+                // Pre-fill the input if saved
+                const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
+                ui.hostingUrl.value = savedUrls[settings.repo] || '';
+                
+                // Set the correct repository URLs for the one-click deploy buttons
+                const repoUrl = `https://github.com/${settings.repo}`;
+                ui.btnDeployVercel.href = `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repoUrl)}`;
+                ui.btnDeployNetlify.href = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent(repoUrl)}`;
+                ui.btnDeployCloudflare.href = `https://dash.cloudflare.com/?to=/:account/pages/new`;
+                ui.btnDeployGitHub.href = `${repoUrl}/settings/pages`;
+            }
+        };
+        
+        ui.hostingSaveBtn.onclick = () => {
+            const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
+            savedUrls[settings.repo] = ui.hostingUrl.value;
+            localStorage.setItem('zcms-hosting', JSON.stringify(savedUrls));
+            ui.hostingPanel.style.display = 'none';
+            showToast('Hosting address saved!', 'success');
+        };
+
         ui.saveBtn.onclick = async () => {
              if (!cmsService) return;
+             ui.saveBtn.disabled = true;
+             const oldHTML = ui.saveBtn.innerHTML;
+             ui.saveBtn.innerHTML = 'Publishing...';
              try {
                 showToast('Syncing to GitHub...', 'info');
                 await cmsService.publishChanges('Visual update via ZeroCMS');
-                showToast('Changes published!', 'success');
                 ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
-             } catch (e) { showToast(e.message, 'error'); }
+                
+                const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
+                const liveUrl = savedUrls[settings.repo];
+                
+                if (liveUrl) {
+                    showToast('Changes published! Background build started.', 'success');
+                    // Create a persistent "View Live" notification overlay
+                    const liveToast = document.createElement('div');
+                    liveToast.className = 'toast success show';
+                    liveToast.style.bottom = '5rem';
+                    liveToast.style.pointerEvents = 'auto'; // allow clicking
+                    liveToast.innerHTML = `
+                        <div style="margin-bottom:8px;">Site is building! Live in ~1 min.</div>
+                        <a href="${liveUrl}" target="_blank" style="color:white; font-weight:700; text-decoration:underline;">View Live Site →</a>
+                        <button onclick="this.parentElement.remove()" style="margin-left: 12px; background:transparent; border:none; color:white; cursor:pointer;">✕</button>
+                    `;
+                    document.body.appendChild(liveToast);
+                } else {
+                    showToast('Changes published!', 'success');
+                }
+             } catch (e) { 
+                 showToast(e.message, 'error'); 
+             } finally {
+                 ui.saveBtn.disabled = false;
+                 ui.saveBtn.innerHTML = oldHTML;
+             }
         };
 
         // Check for token in URL (extracted at the top of the script)

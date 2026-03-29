@@ -2,31 +2,13 @@
 
 A production-ready, zero-config CMS that runs a development environment (Astro, Vite, etc.) entirely in your browser using WebContainers and isomorphic-git.
 
-## 🚀 Quick Start
+## 🚀 How it works
 
-### 1. Prerequisites
-- **Node.js**: Version 16 or higher is required.
-- **GitHub OAuth App**: You need a GitHub OAuth App or GitHub App to handle authentication.
+ZeroCMS is designed to be completely zero-setup for you and your editors. You don't need to configure `.env` files, databases, or local development environments.
 
-### 2. Configuration
-Create a `.env` file in the root directory and add your GitHub credentials:
-```env
-GITHUB_CLIENT_ID=your_client_id_here
-GITHUB_CLIENT_SECRET=your_client_secret_here
-```
-
-### 3. Installation
-Install the necessary dependencies (optional, but recommended for development):
-```bash
-npm install
-```
-
-### 4. Running the CMS
-Start the local development server:
-```bash
-npm start
-```
-By default, the CMS will be available at [http://localhost:3000/](http://localhost:3000/).
+1. **Connect**: Open the ZeroCMS dashboard and click "Connect with GitHub".
+2. **Authorize**: Approve the ZeroCMS GitHub App to grant access to the repositories you want to manage.
+3. **Edit**: Select your project. Our quantum boot engine downloads, installs, and runs your site directly in your browser. Start visually editing instantly!
 
 ## 🛠 Features
 
@@ -55,13 +37,14 @@ ZeroCMS uses a unique high-performance architecture:
 - **Visual Bridge**: A zero-config postMessage bridge that allows the host to edit the iframe content in-place.
 - **Binary Snapshots**: Uses `tar` blobs in IndexedDB to skip `npm install` for previously loaded repositories.
 
-## 🤝 Contributing
+## 🤝 Contributing & Self-Hosting
 
-We welcome contributions! To get started:
-1. **Fork** the repository.
-2. **Setup** your local `.env` with GitHub OAuth credentials.
-3. **Develop** your feature or fix.
-4. **Submit** a Pull Request with a clear description of the changes.
+ZeroCMS is an open-source project. If you wish to self-host or contribute to the core:
+
+1. **Fork & Clone** the repository.
+2. **Setup** a `.env` file with your own `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a custom GitHub OAuth App.
+3. **Run** `npm install` && `npm start`. The dev environment runs on `localhost:3000`.
+4. **Develop** your feature or fix and submit a PR!
 
 Please ensure your code follows the existing minimalist aesthetic and uses vanilla JS/CSS where possible.
 
