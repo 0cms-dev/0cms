@@ -22,7 +22,7 @@ function loadEnv() {
 }
 loadEnv();
 
-const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'YOUR_CLIENT_ID';
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'Iv23liNrAlnfsB931xbl';
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
 
 const MIME_TYPES = {
@@ -67,6 +67,8 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    const installationId = url.searchParams.get('installation_id');
+
     // Exchange code for Access Token
     const data = JSON.stringify({
       client_id: CLIENT_ID,
@@ -91,14 +93,22 @@ const server = http.createServer((req, res) => {
       let body = '';
       gitRes.on('data', (d) => { body += d; });
       gitRes.on('end', () => {
-        const tokenData = JSON.parse(body);
-        if (tokenData.access_token) {
-          // Redirect back to index with the token
-          res.writeHead(302, { Location: `/index.html?token=${tokenData.access_token}` });
-          res.end();
-        } else {
+        try {
+          const tokenData = JSON.parse(body);
+          if (tokenData.access_token) {
+            // Redirect back to index with the token and optional installation_id
+            let redirectUrl = `/index.html?token=${tokenData.access_token}`;
+            if (installationId) redirectUrl += `&installation_id=${installationId}`;
+            
+            res.writeHead(302, { Location: redirectUrl });
+            res.end();
+          } else {
+            res.writeHead(500);
+            res.end('GitHub Token Error: ' + body);
+          }
+        } catch (e) {
           res.writeHead(500);
-          res.end('GitHub Token Error: ' + body);
+          res.end('JSON Parse Error: ' + body);
         }
       });
     });

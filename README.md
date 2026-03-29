@@ -2,13 +2,15 @@
 
 A production-ready, zero-config CMS that runs a development environment (Astro, Vite, etc.) entirely in your browser using WebContainers and isomorphic-git.
 
+## Getting Started
+
+ZeroCMS is designed to be completely zero-setup. You don't need to configure `.env` files, databases, or local development environments.
+
+1.  **Install the GitHub App**: [Install 0CMS on your repositories](https://github.com/apps/0cms/installations/new).
+2.  **Authorize**: Approve the App to grant access to the projects you want to manage.
+3.  **Edit**: Select a repository. Our engine boots your site directly in the browser—start visually editing instantly!
+
 ## How it works
-
-ZeroCMS is designed to be completely zero-setup for you and your editors. You don't need to configure `.env` files, databases, or local development environments.
-
-1. **Connect**: Open the ZeroCMS dashboard and click "Connect with GitHub".
-2. **Authorize**: Approve the ZeroCMS GitHub App to grant access to the repositories you want to manage.
-3. **Edit**: Select your project. Our quantum boot engine downloads, installs, and runs your site directly in your browser. Start visually editing instantly!
 
 ## 🛠 Features
 

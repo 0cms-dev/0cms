@@ -777,11 +777,19 @@
         // Extract token from URL if returning from GitHub OAuth
         const urlParams = new URLSearchParams(window.location.search);
         const tokenFromUrl = urlParams.get('token');
+        const installIdFromUrl = urlParams.get('installation_id');
+
         if (tokenFromUrl) {
             settings.token = tokenFromUrl;
+            if (installIdFromUrl) settings.installation_id = installIdFromUrl;
             localStorage.setItem('zcms-settings', JSON.stringify(settings));
             // Clean up the URL for a premium zero-config look
             window.history.replaceState({}, document.title, window.location.pathname);
+            
+            // Auto-trigger picker/fetch if we just logged in
+            ui.stepLogin.classList.add('hidden');
+            ui.stepPicker.classList.remove('hidden');
+            fetchRepos();
         }
 
         let cmsActive = false;
@@ -852,8 +860,8 @@
             }, 400);
         };
 
-        ui.loginBtn.onclick = () => window.location.href = '/github/login';
-        ui.landingLoginBtn.onclick = () => window.location.href = '/github/login';
+        ui.loginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms/installations/new';
+        ui.landingLoginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms/installations/new';
         
         ui.backToLoginBtn.onclick = () => {
             ui.stepPicker.classList.add('hidden');
@@ -1050,17 +1058,26 @@
         async function fetchRepos() {
             ui.repoLoader.classList.remove('hidden');
             ui.repoList.innerHTML = '';
+            ui.landingRepoList.innerHTML = '';
             try {
-                const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
-                    headers: { Authorization: `token ${settings.token}` }
+                let apiUrl = 'https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all';
+                if (settings.installation_id) {
+                    apiUrl = `https://api.github.com/user/installations/${settings.installation_id}/repositories`;
+                }
+
+                const res = await fetch(apiUrl, {
+                    headers: { 
+                        Authorization: `token ${settings.token}`,
+                        Accept: 'application/vnd.github.v3+json'
+                    }
                 });
-                const repos = await res.json();
+                let data = await res.json();
+                let repos = Array.isArray(data) ? data : (data.repositories || []);
                 
                 if (!Array.isArray(repos)) {
-                    const errorMsg = repos.message || 'Failed to fetch repositories. Please check your GitHub connection.';
+                    const errorMsg = data.message || 'Failed to fetch repositories. Please check your GitHub connection.';
                     showToast(errorMsg, 'error');
                     if (res.status === 401) {
-                        // Token invalid, go back to login
                         setTimeout(() => {
                            settings.token = null;
                            localStorage.setItem('zcms-settings', JSON.stringify(settings));
@@ -1072,19 +1089,29 @@
                 }
 
                 if (repos.length === 0) {
-                    ui.repoList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted)">No repositories found. Ensure the GitHub App is installed.</div>';
+                    ui.repoList.innerHTML = `
+                        <div style="padding:20px; text-align:center; color:var(--text-muted)">
+                            No repositories found.<br>
+                            <a href="https://github.com/apps/0cms/installations/new" style="color:var(--primary); text-decoration:none; margin-top:10px; display:inline-block;">Link repositories →</a>
+                        </div>`;
+                    return;
+                }
+
+                // Auto-select if only one repo and we just came from an install
+                if (repos.length === 1 && settings.installation_id) {
+                    selectRepo(repos[0].full_name);
                     return;
                 }
 
                 repos.forEach(repo => {
-                    // 1. Dashboard List
+                    // Update Dashboard list...
                     const item = document.createElement('div');
                     item.className = 'repo-item';
                     item.onclick = () => selectRepo(repo.full_name);
                     item.innerHTML = `<div><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
                     ui.repoList.appendChild(item);
 
-                    // 2. Landing Page List (Compact)
+                    // Update Landing list...
                     const card = document.createElement('div');
                     card.className = 'project-card';
                     card.onclick = () => selectRepo(repo.full_name);
