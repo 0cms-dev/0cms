@@ -36,6 +36,12 @@ By default, the CMS will be available at [http://localhost:3000/](http://localho
 - **Persistent Storage**: Uses `lightning-fs` to keep your repository in IndexedDB.
 - **Seamless Publishing**: Commits and pushes changes directly to GitHub.
 
+### 🚧 Work in Progress / Next Steps
+1. **Responsive Preview**: Test website across Mobile, Tablet, and Desktop directly in the dashboard. (Current Focus)
+2. **Content Creation**: Generate new pages or list items (e.g., from Markdown templates).
+3. **SEO & Assets**: Meta-editor for OpenGraph tags and a central Media Library.
+4. **One-Click Deploy**: Automated deployments via Vercel/Cloudflare integration.
+
 - `index.html`: The modern dashboard for managing your repositories.
 - `WebContainerGitService.js`: The core logic for Git and WebContainer orchestration.
 - `cms.js`: The visual editor bridge that runs inside the preview iframe.
