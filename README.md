@@ -2,7 +2,7 @@
 
 A production-ready, zero-config CMS that runs a development environment (Astro, Vite, etc.) entirely in your browser using WebContainers and isomorphic-git.
 
-## 🚀 How it works
+## How it works
 
 ZeroCMS is designed to be completely zero-setup for you and your editors. You don't need to configure `.env` files, databases, or local development environments.
 

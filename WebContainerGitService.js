@@ -588,53 +588,122 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
   }
 
   /**
-   * ZERO CONFIG CONTENT CREATION
-   * Automatically detect where to put new pages based on the framework
+   * ZERO CONFIG CONTENT DISCOVERY & CREATION
+   * Automatically detect collections based on markdown/html files
    */
-  async createNewPage(title) {
-    const slug = title.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').replace(/(^-|-$)/g, '');
-    const date = new Date().toISOString().split('T')[0];
-    const frontmatter = `---\ntitle: "${title}"\ndate: "${date}"\n---\n\nStart writing your content here...\n`;
-    
-    const checkDir = async (p) => {
-      try { await this.webcontainerInstance.fs.readdir(p); return true; } catch(e) { return false; }
-    };
-    
-    let targetPath = null;
-    const paths = [
-      '/src/content/blog',
-      '/src/pages/blog',
-      '/source/_posts',
-      '/content/posts',
-      '/src/pages'
-    ];
+  async scanCollections() {
+    this.collections = [];
+    const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'public', '.astro', '.next', 'assets', 'images', 'components', 'layouts'];
+    const validExtensions = ['.md', '.mdx', '.html', '.njk', '.11ty.js'];
 
-    for (const p of paths) {
-      if (await checkDir(p)) {
-        targetPath = `${p}/${slug}.md`;
-        break;
-      }
-    }
-    
-    // Fallback if no specific content dir found
-    if (!targetPath) {
-      if (await checkDir('/src/pages')) targetPath = `/src/pages/${slug}.md`;
-      else targetPath = `/${slug}.md`; 
-    }
-    
-    // Create necessary directories in WebContainer
-    const dir = targetPath.substring(0, targetPath.lastIndexOf('/'));
-    const ensureContainerDir = async (pathStr) => {
-      const parts = pathStr.split('/').filter(Boolean);
-      let currentPath = '';
-      for (const part of parts) {
-        currentPath += '/' + part;
-        try { await this.webcontainerInstance.fs.mkdir(currentPath); } catch(e) {}
+    const readDirRecursive = async (currentPath, maxDepth = 4, currentDepth = 0) => {
+      if (currentDepth > maxDepth) return;
+      try {
+        const entries = await this.webcontainerInstance.fs.readdir(currentPath, { withFileTypes: true });
+        
+        let fileCount = 0;
+        let lastValidFile = null;
+        let hasNonIndexFile = false;
+
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            if (!ignoreDirs.includes(entry.name) && !entry.name.startsWith('.')) {
+              await readDirRecursive(currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`, maxDepth, currentDepth + 1);
+            }
+          } else if (entry.isFile()) {
+            const ext = entry.name.substring(entry.name.lastIndexOf('.'));
+            const lowerName = entry.name.toLowerCase();
+            if (validExtensions.includes(ext) && lowerName !== 'readme.md') {
+              fileCount++;
+              lastValidFile = entry.name;
+              if (!lowerName.startsWith('index.') && !lowerName.startsWith('404.')) {
+                hasNonIndexFile = true;
+              }
+            }
+          }
+        }
+
+        // We consider it a "collection" if there is at least one non-index file OR multiple files.
+        // This prevents capturing standalone page routes (like /about/index.md) as collections.
+        if (fileCount > 0 && lastValidFile && currentPath !== '/') {
+          if (fileCount > 1 || hasNonIndexFile) {
+            let colName = currentPath.split('/').pop() || currentPath;
+            colName = colName.replace(/^_/, ''); // e.g., _posts -> posts
+            this.collections.push({
+              path: currentPath,
+              name: colName,
+              templateFile: lastValidFile
+            });
+          }
+        }
+      } catch (e) {
+        // Ignored unreadable dirs
       }
     };
-    await ensureContainerDir(dir);
+
+    // Fast tracking common paths
+    try { await readDirRecursive('/src/content', 2); } catch(e){}
+    try { await readDirRecursive('/src/pages', 3); } catch(e){}
+    try { await readDirRecursive('/content', 2); } catch(e){}
     
-    // Create necessary directories in Lightning FS (Persistence)
+    // If nothing found, wider scan
+    if (this.collections.length === 0) {
+      await readDirRecursive('/', 3);
+    }
+    
+    // Deduplicate array of objects based on 'path'
+    const uniquePaths = new Set();
+    this.collections = this.collections.filter(c => {
+      if (!uniquePaths.has(c.path)) {
+        uniquePaths.add(c.path);
+        return true;
+      }
+      return false;
+    });
+
+    this.onLog(`[Discovery] Found ${this.collections.length} potential content collections.`);
+    return this.collections;
+  }
+
+  async createNewItem(collectionPath, title, templateFile) {
+    const slug = title.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').replace(/(^-|-$)/g, '');
+    const ext = templateFile.substring(templateFile.lastIndexOf('.'));
+    const targetPath = `${collectionPath}/${slug}${ext}`;
+    
+    // Read the template file
+    const templateContent = await this.webcontainerInstance.fs.readFile(`${collectionPath}/${templateFile}`, 'utf-8');
+    
+    // We try to extract frontmatter (YAML block bounded by ---)
+    let newContent = templateContent;
+    const fmRegex = /^---\n([\s\S]*?)\n---/;
+    const match = templateContent.match(fmRegex);
+    
+    const date = new Date().toISOString().split('T')[0];
+
+    if (match) {
+      let frontmatter = match[1];
+      // Updated title
+      if (/^title:\s*/m.test(frontmatter)) {
+         frontmatter = frontmatter.replace(/^title:\s*["']?.*?["']?/m, `title: "${title}"`);
+      } else {
+         frontmatter += `\ntitle: "${title}"`;
+      }
+      
+      // Updated date
+      if (/^date:\s*/m.test(frontmatter)) {
+         frontmatter = frontmatter.replace(/^date:\s*["']?.*?["']?/m, `date: "${date}"`);
+      } else {
+         frontmatter += `\ndate: "${date}"`;
+      }
+      
+      newContent = `---\n${frontmatter}\n---\n\nStart writing your new content here...\n`;
+    } else {
+      // If no frontmatter found (e.g. pure HTML), we just clone and insert a placeholder
+      newContent = `<!-- Title: ${title} -->\n<div>New Content</div>\n`;
+    }
+    
+    // Ensure LightningFS target dir exists
+    const dir = targetPath.substring(0, targetPath.lastIndexOf('/'));
     const ensureLightningDir = async (pathStr) => {
       const parts = pathStr.split('/').filter(Boolean);
       let currentPath = this.dir;
@@ -644,12 +713,12 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       }
     };
     await ensureLightningDir(dir);
+
+    // Save to both filesystems
+    await this.webcontainerInstance.fs.writeFile(targetPath, newContent);
+    await this.fs.writeFile(this.dir + targetPath, newContent);
     
-    // Write the files
-    await this.webcontainerInstance.fs.writeFile(targetPath, frontmatter);
-    await this.fs.writeFile(this.dir + targetPath, frontmatter);
-    
-    this.onLog(`[CMS] Created new page at ${targetPath}`);
+    this.onLog(`[CMS] Created new collection item: ${targetPath}`);
     return targetPath;
   }
 

@@ -3,13 +3,18 @@ class ZeroConfigCMS {
     this.active = false;
     this.styleId = 'cms-styles';
     this.storageKey = `cms-data-${window.location.pathname}`;
-    this.changes = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
     this.inIframe = window.self !== window.top;
+    this.historyStack = [];
+    this.redoStack = [];
     this.init();
   }
 
   init() {
     this.setupStyles();
+    this.changes = JSON.parse(localStorage.getItem(this.storageKey) || '{}') || {};
+    this.historyStack = JSON.parse(localStorage.getItem(`${this.storageKey}-history`) || '[]') || [];
+    this.redoStack = [];
+    this.saveDebounceTimers = {};
     if (Object.keys(this.changes).length > 0) this.applySavedChanges();
     this.fixExternalImages();
     
@@ -42,10 +47,12 @@ class ZeroConfigCMS {
         if (e.data.type === 'CMS_GET_SEO') {
             const titleEl = document.querySelector('title');
             const descEl = document.querySelector('meta[name="description"]');
+            const ogImageEl = document.querySelector('meta[property="og:image"]');
             window.parent.postMessage({
                 type: 'CMS_SEO_DATA',
                 title: titleEl ? titleEl.innerText : '',
-                description: descEl ? descEl.getAttribute('content') : ''
+                description: descEl ? descEl.getAttribute('content') : '',
+                image: ogImageEl ? ogImageEl.getAttribute('content') : ''
             }, '*');
         }
         if (e.data.type === 'CMS_SET_SEO') {
@@ -53,15 +60,31 @@ class ZeroConfigCMS {
             if (titleEl && e.data.title !== titleEl.innerText) {
                 if (!titleEl.dataset.cmsOriginal) titleEl.dataset.cmsOriginal = titleEl.innerText;
                 titleEl.innerText = e.data.title;
-                this.saveChange(this.getSelector(titleEl), e.data.title);
+                this.saveChange('title', e.data.title);
             }
             
             const descEl = document.querySelector('meta[name="description"]');
             if (descEl && e.data.description !== descEl.getAttribute('content')) {
                 if (!descEl.dataset.cmsOriginal) descEl.dataset.cmsOriginal = descEl.getAttribute('content');
                 descEl.setAttribute('content', e.data.description);
-                this.saveChange(this.getSelector(descEl), e.data.description);
+                this.saveChange('meta[name="description"]', e.data.description);
             }
+
+            const ogImageEl = document.querySelector('meta[property="og:image"]');
+            if (ogImageEl && e.data.image !== ogImageEl.getAttribute('content')) {
+                if (!ogImageEl.dataset.cmsOriginal) ogImageEl.dataset.cmsOriginal = ogImageEl.getAttribute('content');
+                ogImageEl.setAttribute('content', e.data.image);
+                this.saveChange('meta[property="og:image"]', e.data.image);
+            }
+        }
+        if (e.data.type === 'CMS_UNDO') {
+            this.undo();
+        }
+        if (e.data.type === 'CMS_REDO') {
+            this.redo();
+        }
+        if (e.data.type === 'CMS_HIGHLIGHT') {
+            this.highlight(e.data.selector);
         }
       });
       // Initial notification of existing changes
@@ -92,12 +115,16 @@ class ZeroConfigCMS {
               else type = 'text';
               original = el.dataset.cmsOriginal;
           }
+          const action = this.historyStack.slice().reverse().find(a => a.selector === sel);
+          const timestamp = action ? action.timestamp : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
           return {
             selector: sel,
             updated: val,
             original: original,
             sourceFile: sourceFile,
-            type: type
+            type: type,
+            time: timestamp
           };
         } catch (e) { return null; }
       }).filter(Boolean);
@@ -105,7 +132,9 @@ class ZeroConfigCMS {
       window.parent.postMessage({ 
         type: 'CMS_CHANGED', 
         changes: this.changes,
-        entries: entries
+        entries: entries,
+        canUndo: this.historyStack.length > 0,
+        canRedo: this.redoStack.length > 0
       }, '*');
     } catch (e) {
       console.warn('[CMS] Failed to notify parent:', e.message);
@@ -238,6 +267,15 @@ class ZeroConfigCMS {
       .cms-diff-item { border-bottom: 1px solid #e2e8f0; padding: 16px 0; }
       .cms-diff-selector { color: #64748b; font-family: ui-monospace, monospace; font-size: 11px; margin-bottom: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; display: inline-block; }
       .cms-diff-content { font-size: 14px; line-height: 1.5; color: #10b981; font-weight: 500; }
+
+      .cms-highlight {
+        outline: 4px solid var(--primary) !important;
+        outline-offset: 4px !important;
+        box-shadow: 0 0 30px rgba(138, 43, 226, 0.5) !important;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        z-index: 10001 !important;
+        position: relative !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -292,10 +330,120 @@ class ZeroConfigCMS {
     return path.join(' > ');
   }
 
+  getFriendlyLabel(el) {
+    if (el.tagName === 'TITLE') return 'Page Title';
+    if (el.tagName === 'META') {
+        const name = el.getAttribute('name') || el.getAttribute('property');
+        if (name === 'description') return 'SEO Description';
+        if (name === 'og:image') return 'Social Image';
+        if (name === 'og:title') return 'Social Title';
+        return `Meta: ${name}`;
+    }
+    
+    // Check for standard component names in classes or IDs
+    const findContext = (node) => {
+        let current = node.parentElement;
+        while (current && current !== document.body) {
+            if (current.id) return `in ${current.id}`;
+            if (current.tagName === 'SECTION') return 'in Section';
+            if (current.tagName === 'ARTICLE') return 'in Article';
+            if (current.tagName === 'HEADER') return 'in Header';
+            if (current.tagName === 'FOOTER') return 'in Footer';
+            current = current.parentElement;
+        }
+        return '';
+    };
+
+    const context = findContext(el);
+    let type = 'Text';
+    if (el.tagName.startsWith('H')) type = 'Heading';
+    if (el.tagName === 'IMG') type = 'Image';
+    if (el.tagName === 'A') type = 'Link';
+    if (el.tagName === 'BUTTON') type = 'Button';
+    
+    // Add a snippet of the text if it's text
+    let snippet = '';
+    if (type === 'Text' || type === 'Heading') {
+        const text = el.innerText.trim();
+        if (text) {
+            snippet = text.length > 20 ? ` "${text.substring(0, 20)}..."` : ` "${text}"`;
+        }
+    }
+
+    return `${type}${snippet} ${context}`.trim();
+  }
+
   saveChange(selector, content) {
+    const el = document.querySelector(selector);
+    const prevValue = el ? (el.tagName === 'IMG' ? el.src : (el.tagName === 'META' ? el.getAttribute('content') : el.innerText)) : this.changes[selector];
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // 1. Update changes map immediately for persistence and sync
     this.changes[selector] = content;
     localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
     window.dispatchEvent(new CustomEvent('cms-changed', { detail: this.changes }));
+    this.notifyParent();
+
+    // 2. Debounce history entry (to avoid flooding with every keystroke)
+    if (this.saveDebounceTimers[selector]) clearTimeout(this.saveDebounceTimers[selector]);
+    this.saveDebounceTimers[selector] = setTimeout(() => {
+        // Find if we already have an entry for this session to update or just push
+        const lastAction = this.historyStack[this.historyStack.length - 1];
+        if (lastAction && lastAction.selector === selector && (Date.now() - (lastAction.timeMs || 0) < 5000)) {
+            // Update last entry instead of new one if within 5 seconds
+            lastAction.new = content;
+            lastAction.timestamp = timestamp;
+        } else {
+            this.historyStack.push({ selector, old: prevValue, new: content, timestamp, timeMs: Date.now() });
+            this.redoStack = []; 
+        }
+        localStorage.setItem(`${this.storageKey}-history`, JSON.stringify(this.historyStack));
+        this.notifyParent();
+        delete this.saveDebounceTimers[selector];
+    }, 800);
+  }
+
+  highlight(selector) {
+    const el = document.querySelector(selector);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('cms-highlight');
+        setTimeout(() => el.classList.remove('cms-highlight'), 2000);
+    }
+  }
+
+  undo() {
+    if (this.historyStack.length === 0) return;
+    const action = this.historyStack.pop();
+    this.redoStack.push(action);
+    localStorage.setItem(`${this.storageKey}-history`, JSON.stringify(this.historyStack));
+    
+    this.changes[action.selector] = action.old;
+    localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
+    // Apply visually to reload or just update DOM
+    const el = document.querySelector(action.selector);
+    if (el) {
+        if (el.tagName === 'IMG') el.src = action.old;
+        else if (el.tagName === 'META') el.setAttribute('content', action.old);
+        else el.innerText = action.old;
+    }
+    this.notifyParent();
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+    const action = this.redoStack.pop();
+    this.historyStack.push(action);
+    localStorage.setItem(`${this.storageKey}-history`, JSON.stringify(this.historyStack));
+    
+    this.changes[action.selector] = action.new;
+    localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
+    const el = document.querySelector(action.selector);
+    if (el) {
+        if (el.tagName === 'IMG') el.src = action.new;
+        else if (el.tagName === 'META') el.setAttribute('content', action.new);
+        else el.innerText = action.new;
+    }
     this.notifyParent();
   }
 

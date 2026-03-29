@@ -189,19 +189,35 @@
             animation: cms-slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
         @keyframes cms-slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes cms-slideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+        #cmsDashboard.closing { animation: cms-slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-        .dashboard-main { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; width: 100vw; height: 100vh; }
+        .dashboard-main { 
+            flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; width: 100vw; height: 100vh;
+            transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dashboard-main.drawer-left-open { padding-left: 340px; }
+        /* No right drawer shift anymore */
 
-        /* FLOATING COMMAND PILL (ULTIMATE LAYOUT) */
-        .command-pill { 
+        .dashboard-main.drawer-left-open.drawer-right-open .command-pill { left: 50%; }
+        @keyframes dockSlideUp { 0% { opacity: 0; transform: translate(-50%, 40px); } 100% { opacity: 1; transform: translate(-50%, 0); } }
+        
+        .hud-container {
             position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 12px; z-index: 10002;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: dockSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .dashboard-main.drawer-left-open .hud-container { left: calc(50% + 170px); }
+        
+        .command-pill { 
+            position: relative; left: auto; transform: none; bottom: auto;
             background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--border);
             padding: 8px 8px; border-radius: 100px; display: flex; align-items: center; gap: 4px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05); z-index: 10002; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            animation: dockSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05);
+            animation: none;
         }
-        @keyframes dockSlideUp { 0% { opacity: 0; transform: translate(-50%, 40px); } 100% { opacity: 1; transform: translate(-50%, 0); } }
         
         .dock-item {
             display: flex; align-items: center; justify-content: center;
@@ -209,7 +225,19 @@
             color: var(--text-muted); font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: 0.2s;
         }
         .dock-item:hover { background: var(--bg-secondary); color: var(--text); }
-        .dock-item.active { background: var(--bg-secondary); color: var(--text); }
+        .dock-item.active { 
+            background: var(--bg-tertiary); color: var(--text);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+        }
+        .dock-item.active svg { stroke: var(--text); }
+        .dock-item.exit-item { 
+            width: 44px; height: 44px; border-radius: 50%; padding: 0;
+            background: var(--glass); display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1); color: #f43f5e; opacity: 0.9;
+        }
+        .dock-item.exit-item:hover { color: white; opacity: 1; background: #f43f5e; border-color: #f43f5e; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4); }
+        .dock-item.exit-item svg { margin: 0; width: 22px; height: 22px; }
         .dock-item svg { width: 18px; height: 18px; margin-right: 6px; }
         .dock-item.icon-only { padding: 8px 12px; }
         .dock-item.icon-only svg { margin-right: 0; }
@@ -289,12 +317,15 @@
             max-height: calc(100vh - 120px); margin: auto;
         }
         .cms-main-area {
-            flex:1; position:relative; display: flex; flex-direction: column; padding:16px; overflow: hidden;
+            flex:1; position:relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
+            transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        .cms-main-area.drawer-left-open { padding-left: 340px; }
+        /* No padding-right shift for SEO anymore */
         
         /* SLATE TERMINAL OVERLAY */
         .cms-terminal { 
-            position: absolute; bottom: 20px; right: 20px; left: auto;
+            position: fixed; bottom: 100px; right: 24px; left: auto;
             width: 320px; background: #0f172a; backdrop-filter: blur(12px); 
             border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
             color: #cbd5e1; font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 12px; 
@@ -353,6 +384,7 @@
             background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s;
         }
         .nav-arrow:hover { background: var(--sidebar-active); color: var(--text); }
+        .nav-arrow.disabled { opacity: 0.25; cursor: default; pointer-events: none; }
         .nav-arrow svg { width: 16px; height: 16px; }
 
         /* HISTORY DRAWER */
@@ -366,13 +398,53 @@
         }
         #cmsHistoryDrawer.open { transform: translateX(0); pointer-events: auto; opacity: 1; }
 
-        .history-item { 
-            padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
-            display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 0.8rem;
+        #cmsPageSettingsPanel {
+            bottom: 80px; left: 50%; transform: translateX(-50%); 
+            width: 420px; height: auto; background: var(--glass); 
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); 
+            border: 1px solid var(--border); border-radius: 20px; 
+            padding: 20px; display: none; flex-direction: column; gap: 16px; 
+            z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .history-item-label { font-weight: 600; color: var(--text); display: block; margin-bottom: 4px; }
-        .history-item-selector { font-family: monospace; opacity: 0.6; font-size: 0.7rem; }
-        .btn-undo { padding: 4px 8px; border-radius: 6px; border: none; background: var(--bg-tertiary); color: var(--text-muted); cursor: pointer; font-size: 0.7rem; transition: 0.2s; }
+        @keyframes modalFadeIn { 
+            from { opacity: 0; transform: translate(-50%, 20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .settings-field {
+            display: flex; flex-direction: column; gap: 6px; margin-bottom: 0;
+        }
+        .settings-label {
+            font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .settings-input {
+            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;
+        }
+        .settings-textarea {
+            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; resize: none;
+        }
+
+        .history-item { 
+            padding: 16px; background: var(--glass); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px;
+            display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .history-item:hover { transform: translateY(-2px); border-color: var(--primary); }
+        .history-item-label { font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .history-item-diff { 
+            padding: 12px; background: rgba(0,0,0,0.05); border-radius: 8px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;
+            display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--border);
+        }
+        .diff-old { padding: 4px 8px; border-radius: 4px; background: #ffe3e3; text-decoration: line-through; color: #c92a2a; border: 1px solid #ffa8a8; font-weight: 500; }
+        .diff-new { padding: 4px 8px; border-radius: 4px; background: #d3f9d8; font-weight: 700; color: #2b8a3e; border: 1px solid #8ce99a; }
+        .history-item-selector { font-family: monospace; opacity: 0.4; font-size: 0.6rem; margin-top: 4px; cursor: help; }
+        .btn-undo { 
+            align-self: flex-end; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); 
+            background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.75rem; 
+            font-weight: 600; transition: 0.2s; display: flex; align-items: center; gap: 4px;
+        }
+        .btn-undo:hover { background: var(--bg-tertiary); border-color: var(--primary); color: var(--primary); }
         .btn-undo:hover { background: var(--primary); color: white; }
         
         .toast { 
@@ -383,18 +455,6 @@
         .toast.info { background: var(--primary); box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3); }
         .toast.success { background: #10b981; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
         .toast.error { background: #ef4444; box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3); }
-
-        /* BRANDING PILLS */
-        .btn-brand { display:flex; align-items:center; gap:6px; flex:1 1 calc(50% - 4px); justify-content:center; text-decoration:none; font-size: 0.8rem; padding: 10px 8px; border-radius: 8px; font-weight: 600; transition: transform 0.2s, opacity 0.2s; color: white !important; border:none; }
-        .btn-brand:hover { transform: translateY(-2px); opacity: 0.9; }
-        .btn-vercel { background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        .btn-netlify { background: #00C7B7; text-shadow: 0 1px 2px rgba(0,0,0,0.1); box-shadow: 0 4px 10px rgba(0, 199, 183, 0.2); }
-        .btn-cloudflare { background: #F38020; box-shadow: 0 4px 10px rgba(243, 128, 32, 0.2); }
-        .btn-github { background: #24292e; box-shadow: 0 4px 10px rgba(36, 41, 46, 0.2); }
-        @media (prefers-color-scheme: dark) {
-            .btn-vercel { background: #fff; color: #000 !important; box-shadow: 0 4px 10px rgba(255,255,255,0.1); }
-            .btn-github { background: #fff; color: #000 !important; }
-        }
 
         /* SPONSORS */
         .sponsors-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; opacity: 0.4; filter: grayscale(1); transition: 0.3s; }
@@ -424,7 +484,7 @@
 
     <main>
         <section class="hero">
-            <h1>Zero Config.<br>Zero Latency.</h1>
+            <h1>Zero Config.<br>Zero Friction.</h1>
             <p class="teaser">The fastest way to edit your Jamstack site. No setup, no database, no friction. Just open and edit.</p>
             
             <div id="heroAuthAction">
@@ -460,17 +520,17 @@
                     <div class="feature-card">
                         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div>
                         <h3>1. Connect</h3>
-                        <p>Link your GitHub repository with one click. 0CMS automatically detects your framework.</p>
+                        <p>Link your GitHub repository. 0CMS handles the setup automatically.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
                         <h3>2. Edit</h3>
-                        <p>Modify your content directly in our visual editor. What you see is exactly what gets published.</p>
+                        <p>Modify content visually. What you see is exactly what you get.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
                         <h3>3. Publish</h3>
-                        <p>Push your changes back to GitHub. Fast, secure, and entirely within your browser.</p>
+                        <p>Push changes to GitHub. Fast, secure, and instant publishing.</p>
                     </div>
                 </div>
             </div>
@@ -478,10 +538,10 @@
             <section style="margin-top: 100px; padding: 60px; background: var(--bg-secondary); border-radius: 32px; border: 1px solid var(--border);">
                 <h2 style="margin-bottom: 24px;">The Era of JSON is Over</h2>
                 <p style="max-width: 600px; margin: 0 auto 40px; color: var(--text-muted);">Stop defining fields in complex JSON files. ZeroCMS detects your content structure automatically, allowing you to edit any static site without a single line of configuration.</p>
-                <div style="display: flex; justify-content: center; gap: 40px; font-weight: 600; color: var(--primary);">
-                    <span>✓ No Config</span>
-                    <span>✓ No Database</span>
-                    <span>✓ Instant Live Preview</span>
+                <div style="display: flex; justify-content: center; gap: 40px; font-weight: 600; color: var(--primary); align-items: center;">
+                    <span style="display:inline-flex; align-items:center; gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> No Config</span>
+                    <span style="display:inline-flex; align-items:center; gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> No Database</span>
+                    <span style="display:inline-flex; align-items:center; gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Instant Live Preview</span>
                 </div>
             </section>
 
@@ -512,70 +572,54 @@
 
     <!-- QUANTUM DASHBOARD OVERLAY -->
     <div id="cmsDashboard">
-        <input type="checkbox" id="devModeToggle" class="hidden"> <!-- Hidden but required by JS -->
         <div class="dashboard-main">
             <div id="previewLoader" class="preview-loader">
                 <div class="loader-spinner"></div>
-                <div style="font-weight:600; color:var(--text-muted); font-size:0.9rem;">Initializing Engine...</div>
+                <div id="cmsLoaderStatus" style="font-weight:600; color:var(--text); font-size:0.9rem; margin-top:16px; letter-spacing:-0.01em;">Initializing ZeroCMS...</div>
             </div>
             
-            <div class="command-pill">
-                <div class="url-chip">
-                    <span id="cmsStatusDot" class="status-dot off"></span>
-                    <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>
+            <div class="hud-container">
+                <div class="command-pill">
+                    <div class="url-chip">
+                        <span id="cmsStatusDot" class="status-dot off"></span>
+                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>
+                    </div>
+                    
+                    <div class="dock-divider"></div>
+                    
+                    <div style="display:flex; gap:2px; padding: 0 4px;">
+                        <button class="dock-item icon-only" id="navBack" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
+                        <button class="dock-item icon-only" id="navForward" title="Forward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></button>
+                    </div>
+                    
+                    <div class="dock-divider"></div>
+
+                    <div style="display:flex; gap:2px; padding: 0 4px;">
+                        <button class="dock-item icon-only active" id="viewDesktop" title="Desktop View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></button>
+                        <button class="dock-item icon-only" id="viewTablet" title="Tablet View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
+                        <button class="dock-item icon-only" id="viewMobile" title="Mobile View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
+                    </div>
+                    
+                    <div class="dock-divider"></div>
+
+                    <button class="dock-item" id="navNewPage" title="Create New Content" style="display:none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        New
+                    </button>
+
+                    <button class="dock-item" id="navSEO" title="Manage SEO Settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg>
+                        SEO
+                    </button>
+
+                    <button class="btn-cms btn-cms-primary" id="cmsSaveBtn" style="display:none; margin-left:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Publish
+                    </button>
                 </div>
-                
-                <div class="dock-divider"></div>
-                
-                <div style="display:flex; gap:2px; padding: 0 4px;">
-                    <button class="dock-item icon-only" id="navBack" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
-                    <button class="dock-item icon-only" id="navForward" title="Forward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></button>
-                </div>
-                
-                <div class="dock-divider"></div>
 
-                <div style="display:flex; gap:2px; padding: 0 4px;">
-                    <button class="dock-item icon-only active" id="viewDesktop" title="Desktop View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></button>
-                    <button class="dock-item icon-only" id="viewTablet" title="Tablet View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
-                    <button class="dock-item icon-only" id="viewMobile" title="Mobile View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
-                </div>
-                
-                <div class="dock-divider"></div>
-
-                <button class="dock-item" id="navNewPage" title="Create New Content">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    New
-                </button>
-
-                <button class="dock-item" id="navSEO" title="Manage SEO Settings">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg>
-                    SEO
-                </button>
-
-                <button class="dock-item" id="navHosting" title="Hosting & Live URL">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-                    Hosting
-                </button>
-
-                <button class="dock-item" id="navHistory" title="Unsaved Changes">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>
-                    Changes
-                </button>
-                
-                <button class="dock-item" id="navTerminal" style="display:none;" title="Terminal">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 11l2 2-2 2M11 15h4"/></svg>
-                    Logs
-                </button>
-                
-                <div class="dock-divider"></div>
-                
-                <button class="dock-item icon-only" id="btnCloseCms" title="Exit Editor" style="color:#ef4444;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-
-                <button class="btn-cms btn-cms-primary" id="cmsSaveBtn" style="display:none; margin-left:8px;">
-                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                     Publish
+                <button class="dock-item icon-only exit-item" id="btnCloseCms" title="Exit Visual Editor">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>
             <div id="cmsActiveRepo" style="position: absolute; top: 28px; right: 24px; font-size: 0.7rem; color: var(--text-muted); font-weight: 500; opacity: 0.6;"></div>
@@ -583,8 +627,11 @@
             <div class="cms-main-area">
                 <div id="cmsHistoryDrawer">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                        <h3 style="font-size:1rem; margin:0">Unsaved Changes</h3>
-                        <div id="cmsHistoryCount" style="font-size:0.7rem; background:var(--bg-tertiary); padding:2px 6px; border-radius:100px;">0</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h3 style="font-size:1rem; margin:0">Unsaved Changes</h3>
+                            <div id="cmsHistoryCount" style="font-size:0.7rem; background:var(--bg-tertiary); padding:2px 6px; border-radius:100px;">0</div>
+                        </div>
+                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="toggleHistory(false)">✕</button>
                     </div>
                     <div id="cmsHistoryList" style="flex:1; overflow-y:auto;">
                         <div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>
@@ -592,70 +639,52 @@
                 </div>
                 <iframe id="cmsPreviewFrame" src="about:blank" allow="cross-origin-isolated"></iframe>
                 
-                <!-- TERMINAL OVERLAY -->
-                <div id="cmsTerminal" class="cms-terminal">
-                   <div class="terminal-header" id="terminalHeader">
-                       <div style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:11px; opacity:0.8;">
-                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Terminal Logs
-                       </div>
-                       <div class="terminal-controls">
-                           <div class="terminal-control yellow" id="terminalMin"></div>
-                           <div class="terminal-control green" id="terminalMax"></div>
-                       </div>
-                   </div>
-                   <div class="terminal-body" id="terminalBody"></div>
-                </div>
 
-                <!-- FLOATING SEO PANEL -->
-                <div id="cmsSEOPanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+
+                <!-- FLOATING CREATE PANEL -->
+                <div id="cmsCreatePanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
                     <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg> SEO Settings</span>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsSEOPanel').style.display='none'">✕</button>
+                        <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg> Create Content</span>
+                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsCreatePanel').style.display='none'">✕</button>
                     </div>
-                    <div style="display:flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Page Title</label>
-                        <input type="text" id="seoTitle" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;" placeholder="e.g. My Website - Home">
-                    </div>
-                    <div style="display:flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Meta Description</label>
-                        <textarea id="seoDesc" rows="3" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; resize: none;" placeholder="Brief description for search engines"></textarea>
-                    </div>
-                    <button class="btn-cms btn-cms-primary" id="seoSaveBtn" style="width: 100%; justify-content: center; padding: 10px; font-size: 0.9rem; margin-top: 4px;">Apply to Preview</button>
+                    <div id="cmsCreateLoader" style="color:var(--text-muted); font-size:0.8rem; text-align:center;">Scanning content schemas...</div>
+                    <div id="cmsCreateList" style="display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
 
-                <!-- FLOATING HOSTING PANEL -->
-                <div id="cmsHostingPanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
-                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg> Hosting Setup</span>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsHostingPanel').style.display='none'">✕</button>
-                    </div>
-                    
-                    <div style="display:flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Live Website URL</label>
-                        <input type="text" id="hostingUrl" style="padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;" placeholder="https://mywebsite.com">
+                <!-- PAGE SETTINGS FLOATING PANEL (ZERO-SAVE) -->
+                <div id="cmsPageSettingsPanel" class="cms-terminal">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <span style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; align-items:center; gap:8px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> 
+                            Page Settings
+                        </span>
+                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsPageSettingsPanel').style.display='none'">✕</button>
                     </div>
 
-                    <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-                        Not hosted yet? Deploy for free directly from your GitHub repository:
-                    </div>
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        <div class="settings-field">
+                            <label class="settings-label">SEO Title</label>
+                            <input type="text" id="seoTitle" class="settings-input" placeholder="Page Title">
+                        </div>
+                        
+                        <div class="settings-field">
+                            <label class="settings-label">Meta Description</label>
+                            <textarea id="seoDesc" rows="3" class="settings-textarea" placeholder="Brief summary..."></textarea>
+                        </div>
 
-                    <div style="display:flex; gap: 8px; flex-wrap: wrap;">
-                        <a id="btnDeployVercel" target="_blank" class="btn-brand btn-vercel">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L24 22H0Z"/></svg> Vercel
-                        </a>
-                        <a id="btnDeployNetlify" target="_blank" class="btn-brand btn-netlify">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="12" y="2" width="14" height="14" transform="rotate(45 12 2)" rx="2"/></svg> Netlify
-                        </a>
-                        <a id="btnDeployCloudflare" target="_blank" class="btn-brand btn-cloudflare">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 16.5A3.5 3.5 0 0 1 18.5 20H5.5A3.5 3.5 0 0 1 2 16.5C2 14.57 3.57 13 5.5 13H6c.55-3.34 3.4-5.5 6-5.5 3.14 0 5.6 2.36 5.92 5.5h.58a3.5 3.5 0 0 1 3.5 3.5z"/></svg> Cloudflare
-                        </a>
-                        <a id="btnDeployGitHub" target="_blank" class="btn-brand btn-github">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.53 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg> GitHub
-                        </a>
-                    </div>
+                        <div class="settings-field">
+                            <label class="settings-label" style="display:flex; justify-content:space-between;">
+                                Social Image
+                                <a href="#" onclick="showToast('Browse coming soon!', 'info'); return false;" style="font-size:0.65rem; color:var(--primary);">Browse...</a>
+                            </label>
+                            <input type="text" id="seoImage" class="settings-input" placeholder="/path/to/image.jpg">
+                        </div>
+                        
 
-                    <button class="btn-cms btn-cms-primary" id="hostingSaveBtn" style="width: 100%; justify-content: center; padding: 10px; font-size: 0.9rem; margin-top: 4px;">Save Address</button>
+                    </div>
                 </div>
+
+
                 
                 <div id="cmsStepLogin" class="onboarding-screen">
                     <div class="onboarding-card">
@@ -702,7 +731,7 @@
             statusText: document.querySelector('.admin-bar span strong'),
             counter: document.getElementById('cmsCounter'),
             preview: document.getElementById('cmsPreviewFrame'),
-            siteUrl: document.getElementById('cmsStatusLabel'),
+            statusLabel: document.getElementById('cmsStatusLabel'),
             statusDot: document.getElementById('cmsStatusDot'),
             repoDisplay: document.getElementById('cmsActiveRepo'),
             stepLogin: document.getElementById('cmsStepLogin'),
@@ -715,38 +744,28 @@
             navHistory: document.getElementById('navHistory'),
             navNewPage: document.getElementById('navNewPage'),
             navSEO: document.getElementById('navSEO'),
-            seoPanel: document.getElementById('cmsSEOPanel'),
+            historyDrawer: document.getElementById('cmsHistoryDrawer'),
+            pageSettingsPanel: document.getElementById('cmsPageSettingsPanel'),
             seoTitle: document.getElementById('seoTitle'),
             seoDesc: document.getElementById('seoDesc'),
+            seoImage: document.getElementById('seoImage'),
             seoSaveBtn: document.getElementById('seoSaveBtn'),
-            navHosting: document.getElementById('navHosting'),
-            hostingPanel: document.getElementById('cmsHostingPanel'),
-            hostingUrl: document.getElementById('hostingUrl'),
-            btnDeployVercel: document.getElementById('btnDeployVercel'),
-            btnDeployNetlify: document.getElementById('btnDeployNetlify'),
-            btnDeployCloudflare: document.getElementById('btnDeployCloudflare'),
-            btnDeployGitHub: document.getElementById('btnDeployGitHub'),
-            hostingSaveBtn: document.getElementById('hostingSaveBtn'),
-            navTerminal: document.getElementById('navTerminal'),
-            devModeToggle: document.getElementById('devModeToggle'),
-            terminal: document.getElementById('cmsTerminal'),
+
+            createPanel: document.getElementById('cmsCreatePanel'),
+            createLoader: document.getElementById('cmsCreateLoader'),
+            createList: document.getElementById('cmsCreateList'),
+
             previewLoader: document.getElementById('previewLoader'),
-            terminalBody: document.querySelector('.terminal-body'),
             navBack: document.getElementById('navBack'),
             navForward: document.getElementById('navForward'),
-            navHistoryBtn: document.getElementById('navHistory'),
             landingAuthAction: document.getElementById('heroAuthAction'),
             landingLoginBtn: document.getElementById('landingLoginBtn'),
             landingRepoSection: document.getElementById('landingRepoSection'),
             landingRepoList: document.getElementById('landingRepoList'),
             btnToggleLanding: document.getElementById('toggleCmsBtnLanding'),
-            toast: document.getElementById('cmsToast'),
-            historyDrawer: document.getElementById('cmsHistoryDrawer'),
             historyList: document.getElementById('cmsHistoryList'),
             historyCount: document.getElementById('cmsHistoryCount'),
-            terminalHeader: document.getElementById('terminalHeader'),
-            terminalMin: document.getElementById('terminalMin'),
-            terminalMax: document.getElementById('terminalMax'),
+            loaderStatus: document.getElementById('cmsLoaderStatus'),
             viewDesktop: document.getElementById('viewDesktop'),
             viewTablet: document.getElementById('viewTablet'),
             viewMobile: document.getElementById('viewMobile'),
@@ -826,7 +845,11 @@
         ui.btnToggleLanding.onclick = () => ui.btnToggle.click();
 
         ui.btnClose.onclick = () => {
-            ui.dashboard.style.display = 'none';
+            ui.dashboard.classList.add('closing');
+            setTimeout(() => {
+                ui.dashboard.style.display = 'none';
+                ui.dashboard.classList.remove('closing');
+            }, 400);
         };
 
         ui.loginBtn.onclick = () => window.location.href = '/github/login';
@@ -837,53 +860,96 @@
             ui.stepLogin.classList.remove('hidden');
         };
 
-        // History diff
-        ui.counter.onclick = () => cms.showDiff();
-        
         ui.navNewPage.onclick = async () => {
-            const title = prompt('Titel für die neue Seite eingeben:');
-            if (title && cmsService) {
-                try {
-                    const path = await cmsService.createNewPage(title);
-                    showToast(`Created: ${path}`, 'success');
-                    // Give Dev Server time to process the file and trigger build
-                    setTimeout(() => {
-                        let urlPath = path.replace('/src/pages', '').replace('/src/content', '').replace('/source', '').replace('.md', '').replace('/index', '');
-                        if (urlPath === '') urlPath = '/';
-                        ui.preview.src = cmsService.serverUrl + urlPath;
-                    }, 1800);
-                } catch (e) {
-                    showToast('Error creating page', 'error');
+            const isVisible = ui.createPanel.style.display === 'flex';
+            if (isVisible) {
+                ui.createPanel.style.display = 'none';
+                ui.navNewPage.classList.remove('active');
+                return;
+            }
+            ui.pageSettingsPanel.style.display = 'none';
+            ui.navSEO.classList.remove('active');
+            
+            ui.createPanel.style.display = 'flex';
+            ui.navNewPage.classList.add('active');
+            ui.createLoader.style.display = 'block';
+            ui.createList.innerHTML = '';
+            
+            if (cmsService) {
+                const collections = await cmsService.scanCollections();
+                ui.createLoader.style.display = 'none';
+                
+                if (collections.length === 0) {
+                    ui.createList.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">No templates found.</div>';
+                    return;
                 }
+                
+                collections.forEach(col => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-cms';
+                    btn.style.width = '100%';
+                    btn.style.justifyContent = 'flex-start';
+                    btn.style.padding = '8px 12px';
+                    // capitalize name
+                    const name = col.name.charAt(0).toUpperCase() + col.name.slice(1);
+                    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M12 5v14m-7-7h14"/></svg> New ${name}`;
+                    btn.onclick = async () => {
+                        const title = prompt(`Enter title for new ${name}:`);
+                        if (!title) return;
+                        ui.createPanel.style.display = 'none';
+                        showToast(`Creating ${title}...`, 'info');
+                        try {
+                            const newPath = await cmsService.createNewItem(col.path, title, col.templateFile);
+                            showToast(`Created successfully!`, 'success');
+                            setTimeout(() => {
+                                let urlPath = newPath.replace('/src/pages', '').replace('/src/content', '').replace('/content', '').replace('/source', '').replace('.md', '').replace('.mdx', '').replace('.html', '').replace('.njk', '').replace('/index', '');
+                                if (urlPath === '' || urlPath.startsWith('//')) urlPath = '/';
+                                ui.preview.src = cmsService.serverUrl + urlPath;
+                            }, 1800);
+                        } catch (err) {
+                            showToast('Error creating item', 'error');
+                        }
+                    };
+                    ui.createList.appendChild(btn);
+                });
             }
         };
 
+        ui.pageSettingsPanel = document.getElementById('cmsPageSettingsPanel');
+
         ui.navSEO.onclick = () => {
-            const isVisible = ui.seoPanel.style.display === 'flex';
+            const isVisible = ui.pageSettingsPanel.style.display === 'flex';
             if (isVisible) {
-                ui.seoPanel.style.display = 'none';
+                ui.pageSettingsPanel.style.display = 'none';
+                ui.navSEO.classList.remove('active');
             } else {
-                ui.seoPanel.style.display = 'flex';
-                // Fetch current SEO tags from the iframe
+                ui.pageSettingsPanel.style.display = 'flex';
+                ui.navSEO.classList.add('active');
+                ui.createPanel.style.display = 'none';
+                ui.navNewPage.classList.remove('active');
                 ui.preview.contentWindow.postMessage({ type: 'CMS_GET_SEO' }, '*');
             }
         };
-        
-        ui.seoSaveBtn.onclick = () => {
-            ui.preview.contentWindow.postMessage({
+
+        const syncSEO = () => {
+             ui.preview.contentWindow.postMessage({
                 type: 'CMS_SET_SEO',
                 title: ui.seoTitle.value,
-                description: ui.seoDesc.value
+                description: ui.seoDesc.value,
+                image: ui.seoImage.value
             }, '*');
-            ui.seoPanel.style.display = 'none';
-            showToast('SEO settings applied successfully', 'success');
         };
+
+        ui.seoTitle.oninput = syncSEO;
+        ui.seoDesc.oninput = syncSEO;
+        ui.seoImage.oninput = syncSEO;
 
         // Window Event Listener for generic postMessages from iframe
         window.addEventListener('message', (e) => {
             if (e.data.type === 'CMS_SEO_DATA') {
                 ui.seoTitle.value = e.data.title || '';
                 ui.seoDesc.value = e.data.description || '';
+                ui.seoImage.value = e.data.image || '';
             }
             // Existing ones are handled in cms.js globally, but we intercept SEO here
             if (e.data.type === 'CMS_READY') {
@@ -891,29 +957,6 @@
             }
         });
 
-        ui.navTerminal.onclick = () => {
-            ui.terminal.classList.toggle('expanded');
-        };
-
-        ui.terminalMin.onclick = (e) => {
-            e.stopPropagation();
-            ui.terminal.classList.remove('expanded', 'maximized');
-        };
-
-        ui.terminalMax.onclick = (e) => {
-            e.stopPropagation();
-            ui.terminal.classList.toggle('maximized');
-        };
-
-        ui.terminalHeader.onclick = () => {
-            if (!ui.terminal.classList.contains('expanded')) {
-                ui.terminal.classList.add('expanded');
-            } else if (ui.terminal.classList.contains('maximized')) {
-                ui.terminal.classList.remove('maximized');
-            } else {
-                ui.terminal.classList.remove('expanded');
-            }
-        };
 
         // Responsive Preview Viewport Controls
         const updateViewport = (view) => {
@@ -944,24 +987,19 @@
             cmsService = preWarmingService;
             
             cmsService.onLog = (msg) => {
-                const line = document.createElement('div');
-                line.textContent = msg;
-                ui.terminalBody.appendChild(line);
-                ui.terminalBody.scrollTop = ui.terminalBody.scrollHeight;
-                if (msg.toLowerCase().includes('error')) showToast('Error in engine logs', 'error');
+                console.log(`%c[WebContainer] %c${msg}`, 'color:#a78bfa; font-weight:bold;', 'color:inherit;');
+                if (msg.toLowerCase().includes('error')) console.error(`[WebContainer Error] ${msg}`);
             };
 
             cmsService.onStatusChange = (msg) => {
+                if (ui.loaderStatus) ui.loaderStatus.textContent = msg;
                 showToast(msg, 'info');
-                const line = document.createElement('div');
-                line.innerHTML = `<span style="color:var(--primary)">[Status] ${msg}</span>`;
-                ui.terminalBody.appendChild(line);
-                ui.terminalBody.scrollTop = ui.terminalBody.scrollHeight;
+                console.log(`%c[Status] %c${msg}`, 'color:#34d399; font-weight:bold;', 'color:inherit;');
             };
 
             cmsService.onServerReady = (url) => {
                 ui.preview.src = url;
-                ui.siteUrl.textContent = 'Website Ready';
+                ui.statusLabel.textContent = 'Website Ready';
                 ui.statusDot.className = 'status-dot';
                 showToast('Editor ready!', 'success');
                 
@@ -973,13 +1011,22 @@
                     }, '*');
                     ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
                 };
+
+                // Check for collections and show + New button if found
+                cmsService.scanCollections().then(cols => {
+                    if (cols.length > 0) ui.navNewPage.style.display = 'flex';
+                });
             };
 
             // If already pre-warmed, ensure UI shows the URL immediately
             if (cmsService.serverUrl) {
                 ui.preview.src = cmsService.serverUrl;
-                ui.siteUrl.textContent = cmsService.serverUrl;
+                ui.statusLabel.textContent = cmsService.serverUrl;
                 ui.statusDot.className = 'status-dot';
+                
+                cmsService.scanCollections().then(cols => {
+                    if (cols.length > 0) ui.navNewPage.style.display = 'flex';
+                });
                 return;
             }
 
@@ -1084,7 +1131,8 @@
                     setTimeout(() => ui.previewLoader.style.display = 'none', 500);
                 }
                 ui.statusDot.className = 'status-dot on';
-                ui.siteUrl.textContent = 'Website Ready';
+                ui.statusLabel.textContent = '0 Unsaved Changes';
+                ui.statusLabel.style.color = 'var(--text-muted)';
             }
 
             if (e.data.type === 'CMS_CHANGED') {
@@ -1094,16 +1142,18 @@
                 ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
                 
                 // Update dynamic status
-                if (count > 0) {
-                    ui.siteUrl.textContent = `${count} Change${count > 1 ? 's' : ''} Unsaved`;
-                    ui.siteUrl.style.color = 'var(--primary)';
-                } else {
-                    ui.siteUrl.textContent = 'Website Ready';
-                    ui.siteUrl.style.color = '';
-                }
+                ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
+                ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
 
-                ui.counter.textContent = `${count} Changes saved`;
-                ui.counter.style.display = count > 0 ? 'inline' : 'none';
+                ui.counter.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} saved`;
+                ui.counter.style.display = 'inline';
+                
+                // Toggle Undo/Redo button states
+                if (e.data.canUndo) ui.navBack.classList.remove('disabled');
+                else ui.navBack.classList.add('disabled');
+                
+                if (e.data.canRedo) ui.navForward.classList.remove('disabled');
+                else ui.navForward.classList.add('disabled');
                 
                 if (ui.historyCount) ui.historyCount.textContent = count;
                 
@@ -1112,110 +1162,77 @@
                     if (count === 0) {
                         ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
                     } else {
-                        ui.historyList.innerHTML = entries.map(entry => `
-                            <div class="history-item">
-                                <div style="flex:1">
-                                    <span class="history-item-label">${entry.type === 'image' ? 'Image Update' : 'Text Edit'}</span>
-                                    <span class="history-item-selector">${entry.selector}</span>
+                        ui.historyList.innerHTML = entries.map(entry => {
+                            const oldVal = (entry.original || '').trim();
+                            const newVal = (entry.updated || '').trim();
+                            const displayOld = oldVal.length > 50 ? oldVal.substring(0, 50) + '...' : oldVal;
+                            const displayNew = newVal.length > 50 ? newVal.substring(0, 50) + '...' : newVal;
+
+                            return `
+                            <div class="history-item" onclick="highlightElement('${entry.selector}')">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                    <span class="history-item-label" style="font-size:0.75rem; opacity:0.6; display:flex; align-items:center; gap:4px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                        ${entry.time}
+                                    </span>
+                                    <button class="btn-undo" onclick="event.stopPropagation(); undoChange('${entry.selector}')">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 018 8v2M3 10l6-6M3 10l6 6"/></svg>
+                                        Revert
+                                    </button>
                                 </div>
-                                <button class="btn-undo" onclick="undoChange('${entry.selector}')">Undo</button>
+                                <div class="history-item-diff">
+                                    <div class="diff-old">${displayOld || 'None'}</div>
+                                    <div style="font-size:0.6rem; opacity:0.5; margin: -2px 0;">CHANGES TO ➜</div>
+                                    <div class="diff-new">${displayNew || 'Empty'}</div>
+                                </div>
                             </div>
-                        `).join('');
+                        `}).join('');
                     }
                 }
             }
         };
 
-        // Developer Mode Logic
-        const refreshDevMode = () => {
-             const isDev = settings.devMode || false;
-             
-             // Developer-only UI elements
-             ui.navTerminal.style.display = isDev ? 'flex' : 'none';
-             ui.navHosting.style.display = isDev ? 'flex' : 'none';
-             
-             if (!isDev) {
-                 ui.terminal.classList.remove('expanded', 'maximized', 'visible');
-                 if (ui.hostingPanel && ui.hostingPanel.style.display === 'flex') {
-                     ui.hostingPanel.style.display = 'none';
-                 }
-             } else {
-                 ui.terminal.classList.add('visible');
-             }
-             
-             if (ui.devModeToggle) ui.devModeToggle.checked = isDev;
-             if (cmsService) cmsService.isDevMode = isDev; 
-        };
-
-        if (ui.devModeToggle) {
-            ui.devModeToggle.onchange = (e) => {
-                settings.devMode = e.target.checked;
-                localStorage.setItem('zcms-settings', JSON.stringify(settings));
-                refreshDevMode();
-                showToast(settings.devMode ? 'Developer Mode Enabled' : 'Editor Mode Enabled', 'info');
-            };
-        }
-
-        // Secret Developer Mode Toggle
-        const toggleSecretDevMode = () => {
-             settings.devMode = !settings.devMode;
-             localStorage.setItem('zcms-settings', JSON.stringify(settings));
-             refreshDevMode();
-             showToast(settings.devMode ? 'Developer Mode Enabled' : 'Editor Mode Enabled', 'success');
-        };
-
-        // Trigger: Double click on the URL chip
-        const urlChip = document.querySelector('.url-chip');
-        if (urlChip) {
-            urlChip.addEventListener('dblclick', (e) => {
-                e.preventDefault();
-                toggleSecretDevMode();
-            });
-            urlChip.style.cursor = 'pointer';
-            urlChip.title = 'Double-click to toggle Developer Mode';
-        }
-
-        refreshDevMode();
-
         window.undoChange = (selector) => {
             ui.preview.contentWindow.postMessage({ type: 'CMS_REVERT', selector }, '*');
         };
 
-        ui.navHistoryBtn.onclick = () => {
-            ui.historyDrawer.classList.toggle('open');
-            ui.navHistoryBtn.classList.toggle('active');
+        window.highlightElement = (selector) => {
+            ui.preview.contentWindow.postMessage({ type: 'CMS_HIGHLIGHT', selector }, '*');
         };
 
-        ui.navBack.onclick = () => ui.preview.contentWindow.history.back();
-        ui.navForward.onclick = () => ui.preview.contentWindow.history.forward();
-
-        // Hosting Logic
-        ui.navHosting.onclick = () => {
-            const isVisible = ui.hostingPanel.style.display === 'flex';
-            if (isVisible) {
-                ui.hostingPanel.style.display = 'none';
+        window.toggleHistory = (force) => {
+            const isOpen = typeof force === 'boolean' ? force : !ui.historyDrawer.classList.contains('open');
+            const main = document.querySelector('.dashboard-main');
+            
+            if (isOpen) {
+                ui.historyDrawer.classList.add('open');
+                main.classList.add('drawer-left-open');
+                ui.pageSettingsPanel.style.display = 'none';
             } else {
-                ui.hostingPanel.style.display = 'flex';
-                // Pre-fill the input if saved
-                const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
-                ui.hostingUrl.value = savedUrls[settings.repo] || '';
-                
-                // Set the correct repository URLs for the one-click deploy buttons
-                const repoUrl = `https://github.com/${settings.repo}`;
-                ui.btnDeployVercel.href = `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repoUrl)}`;
-                ui.btnDeployNetlify.href = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent(repoUrl)}`;
-                ui.btnDeployCloudflare.href = `https://dash.cloudflare.com/?to=/:account/pages/new`;
-                ui.btnDeployGitHub.href = `${repoUrl}/settings/pages`;
+                ui.historyDrawer.classList.remove('open');
+                main.classList.remove('drawer-left-open');
             }
         };
-        
-        ui.hostingSaveBtn.onclick = () => {
-            const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
-            savedUrls[settings.repo] = ui.hostingUrl.value;
-            localStorage.setItem('zcms-hosting', JSON.stringify(savedUrls));
-            ui.hostingPanel.style.display = 'none';
-            showToast('Hosting address saved!', 'success');
+
+        // Clicking the status chip in the Pill opens the Unsaved Changes Drawer
+        const urlChip = document.querySelector('.url-chip');
+        if (urlChip) {
+            urlChip.style.cursor = 'pointer';
+            urlChip.title = 'View Unsaved Changes';
+            urlChip.onclick = () => window.toggleHistory();
+        }
+
+        ui.navBack.onclick = () => {
+            ui.preview.contentWindow.postMessage({ type: 'CMS_UNDO' }, '*');
         };
+        ui.navForward.onclick = () => {
+            ui.preview.contentWindow.postMessage({ type: 'CMS_REDO' }, '*');
+        };
+
+        // Initial state
+        ui.navBack.classList.add('disabled');
+        ui.navForward.classList.add('disabled');
+
 
         ui.saveBtn.onclick = async () => {
              if (!cmsService) return;
@@ -1227,25 +1244,7 @@
                 await cmsService.publishChanges('Visual update via ZeroCMS');
                 ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
                 
-                const savedUrls = JSON.parse(localStorage.getItem('zcms-hosting') || '{}');
-                const liveUrl = savedUrls[settings.repo];
-                
-                if (liveUrl) {
-                    showToast('Changes published! Background build started.', 'success');
-                    // Create a persistent "View Live" notification overlay
-                    const liveToast = document.createElement('div');
-                    liveToast.className = 'toast success show';
-                    liveToast.style.bottom = '5rem';
-                    liveToast.style.pointerEvents = 'auto'; // allow clicking
-                    liveToast.innerHTML = `
-                        <div style="margin-bottom:8px;">Site is building! Live in ~1 min.</div>
-                        <a href="${liveUrl}" target="_blank" style="color:white; font-weight:700; text-decoration:underline;">View Live Site →</a>
-                        <button onclick="this.parentElement.remove()" style="margin-left: 12px; background:transparent; border:none; color:white; cursor:pointer;">✕</button>
-                    `;
-                    document.body.appendChild(liveToast);
-                } else {
-                    showToast('Changes published!', 'success');
-                }
+                showToast('Changes published successfully!', 'success');
              } catch (e) { 
                  showToast(e.message, 'error'); 
              } finally {
