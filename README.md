@@ -1,12 +1,16 @@
 # Zero-Config In-Browser CMS
 
+<a href="https://github.com/apps/0cms-dev/installations/new">
+  <img src="https://img.shields.io/badge/Install_0CMS-GitHub_App-black?style=for-the-badge&logo=github" alt="Install 0CMS" height="40" />
+</a>
+
 A production-ready, zero-config CMS that runs a development environment (Astro, Vite, etc.) entirely in your browser using WebContainers and isomorphic-git.
 
 ## Getting Started
 
 ZeroCMS is designed to be completely zero-setup. You don't need to configure `.env` files, databases, or local development environments.
 
-1.  **Install the GitHub App**: [Install 0CMS on your repositories](https://github.com/apps/0cms/installations/new).
+1.  **Install the GitHub App**: [Install 0CMS on your repositories](https://github.com/apps/0cms-dev/installations/new).
 2.  **Authorize**: Approve the App to grant access to the projects you want to manage.
 3.  **Edit**: Select a repository. Our engine boots your site directly in the browser—start visually editing instantly!
 

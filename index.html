@@ -860,8 +860,8 @@
             }, 400);
         };
 
-        ui.loginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms/installations/new';
-        ui.landingLoginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms/installations/new';
+        ui.loginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms-dev/installations/new';
+        ui.landingLoginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms-dev/installations/new';
         
         ui.backToLoginBtn.onclick = () => {
             ui.stepPicker.classList.add('hidden');
@@ -1092,7 +1092,7 @@
                     ui.repoList.innerHTML = `
                         <div style="padding:20px; text-align:center; color:var(--text-muted)">
                             No repositories found.<br>
-                            <a href="https://github.com/apps/0cms/installations/new" style="color:var(--primary); text-decoration:none; margin-top:10px; display:inline-block;">Link repositories →</a>
+                            <a href="https://github.com/apps/0cms-dev/installations/new" style="color:var(--primary); text-decoration:none; margin-top:10px; display:inline-block;">Link repositories →</a>
                         </div>`;
                     return;
                 }
