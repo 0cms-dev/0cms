@@ -637,6 +637,18 @@
         };
 
         let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
+        
+        // --- AUTHENTICATION FLOW ---
+        // Extract token from URL if returning from GitHub OAuth
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenFromUrl = urlParams.get('token');
+        if (tokenFromUrl) {
+            settings.token = tokenFromUrl;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            // Clean up the URL for a premium zero-config look
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         let cmsActive = false;
         let cmsService = null;
         let preWarmPromise = null;
@@ -767,7 +779,7 @@
                 ui.preview.onload = () => {
                     ui.preview.contentWindow.postMessage({ 
                         type: 'CMS_CONFIG', 
-                        proxyUrl: window.location.origin + '/proxy?url='
+                        proxyUrl: 'https://wsrv.nl/?url='
                     }, '*');
                     ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
                 };
@@ -967,13 +979,8 @@
              } catch (e) { showToast(e.message, 'error'); }
         };
 
-        // Check for token in URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token');
-        if (urlToken) {
-            settings.token = urlToken;
-            localStorage.setItem('zcms-settings', JSON.stringify(settings));
-            window.history.replaceState({}, document.title, window.location.pathname);
+        // Check for token in URL (extracted at the top of the script)
+        if (tokenFromUrl) {
             ui.btnToggle.click();
             if (!settings.repo) {
                 ui.stepLogin.classList.add('hidden');

@@ -130,39 +130,81 @@ class ZeroConfigCMS {
     const style = document.createElement('style');
     style.id = this.styleId;
     style.textContent = `
-      .cms-editable:hover { outline: 2px dashed #3498db !important; outline-offset: 2px; cursor: pointer; }
-      .cms-editable:focus { outline: 2px solid #2ecc71 !important; background: rgba(46, 204, 113, 0.05); }
-      .cms-img-container { position: relative; display: inline-block; vertical-align: middle; max-width: 100%; transition: all 0.2s; }
-      .cms-img-container img { cursor: crosshair; transition: transform 0.2s; }
-      .cms-img-container:hover img { transform: scale(1.02); outline: 2px dashed #3498db; }
+      @keyframes cmsGlowPulse {
+        0% { outline-color: rgba(138, 43, 226, 0.4); box-shadow: 0 0 10px rgba(138, 43, 226, 0.2); }
+        50% { outline-color: rgba(138, 43, 226, 0.9); box-shadow: 0 0 20px rgba(138, 43, 226, 0.4); }
+        100% { outline-color: rgba(138, 43, 226, 0.4); box-shadow: 0 0 10px rgba(138, 43, 226, 0.2); }
+      }
+
+      .cms-editable { 
+        transition: background-color 0.3s ease, border-radius 0.3s ease; 
+        border-radius: 4px;
+        outline: 2px solid transparent; 
+        outline-offset: 2px;
+      }
+      
+      .cms-editable:hover { 
+        cursor: text; 
+        border-radius: 6px !important; 
+        outline: 2px solid rgba(138, 43, 226, 0.8) !important;
+        outline-offset: 6px !important; /* Creates padding visually without shifting layout */
+        background-color: rgba(138, 43, 226, 0.05);
+        animation: cmsGlowPulse 2s infinite ease-in-out !important; 
+        position: relative; z-index: 9999;
+      }
+      
+      .cms-editable:focus { 
+        border-radius: 6px !important;
+        outline: 2px solid #2ecc71 !important;
+        outline-offset: 6px !important; 
+        background-color: rgba(46, 204, 113, 0.05); 
+        box-shadow: 0 0 15px rgba(46, 204, 113, 0.3) !important;
+        animation: none !important;
+      }
+
+      .cms-img-container { position: relative; display: inline-block; vertical-align: middle; max-width: 100%; transition: all 0.3s ease; }
+      .cms-img-container img { cursor: crosshair; transition: all 0.3s ease; border-radius: 4px; outline: 2px solid transparent; outline-offset: 2px; }
+      
+      .cms-img-container:hover img { 
+        transform: scale(1.02); 
+        border-radius: 8px !important;
+        outline: 2px solid rgba(138, 43, 226, 0.8) !important;
+        outline-offset: 6px !important;
+        animation: cmsGlowPulse 2s infinite ease-in-out !important;
+      }
+
       .cms-img-overlay, .cms-block-menu { 
-        position: absolute; top: 5px; right: 5px; display: flex; gap: 4px; 
-        opacity: 0; transition: opacity 0.2s; z-index: 1000; 
+        position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; 
+        opacity: 0; transition: opacity 0.2s; z-index: 10000; 
       }
       .cms-img-container:hover .cms-img-overlay, .cms-block:hover .cms-block-menu { opacity: 1; }
+      
       .cms-btn { 
-        background: #2d3436; color: white; border: none; padding: 4px 8px; 
-        border-radius: 4px; font-size: 10px; cursor: pointer; font-family: sans-serif; line-height: 1;
+        background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        color: white; border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; 
+        border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: ui-sans-serif, system-ui; line-height: 1;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.2s ease;
       }
-      .cms-btn:hover { background: #000; }
-      .cms-btn-danger { background: #e74c3c; }
-      .cms-btn-danger:hover { background: #c0392b; }
+      .cms-btn:hover { background: rgba(15, 23, 42, 1); transform: translateY(-1px); box-shadow: 0 6px 14px rgba(0,0,0,0.3); }
+      .cms-btn-danger { background: rgba(220, 38, 38, 0.85); }
+      .cms-btn-danger:hover { background: rgba(220, 38, 38, 1); }
+      
       .cms-block { position: relative; }
       .cms-img-editable:hover { filter: brightness(0.9); }
       
       .cms-modal {
         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: white; padding: 24px; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        z-index: 10000; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto;
-        font-family: sans-serif; color: #333;
+        background: white; padding: 24px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        z-index: 100000; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto;
+        font-family: ui-sans-serif, system-ui; color: #1e293b;
       }
       .cms-modal-backdrop {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5); z-index: 9999; backdrop-filter: blur(2px);
+        background: rgba(15, 23, 42, 0.6); z-index: 99999; backdrop-filter: blur(4px);
       }
-      .cms-diff-item { border-bottom: 1px solid #eee; padding: 12px 0; }
-      .cms-diff-selector { color: #3498db; font-family: monospace; font-size: 10px; margin-bottom: 6px; }
-      .cms-diff-content { font-size: 13px; line-height: 1.4; color: #2ecc71; font-weight: 500; }
+      .cms-diff-item { border-bottom: 1px solid #e2e8f0; padding: 16px 0; }
+      .cms-diff-selector { color: #64748b; font-family: ui-monospace, monospace; font-size: 11px; margin-bottom: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+      .cms-diff-content { font-size: 14px; line-height: 1.5; color: #10b981; font-weight: 500; }
     `;
     document.head.appendChild(style);
   }
@@ -366,23 +408,6 @@ class ZeroConfigCMS {
     return btn;
   }
 
-  triggerUpload(img) {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = e => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = rs => {
-          img.src = rs.target.result;
-          this.saveChange(this.getSelector(img), img.src);
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-    input.click();
-  }
 }
 
 export default new ZeroConfigCMS();

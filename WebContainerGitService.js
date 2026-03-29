@@ -11,7 +11,11 @@ export class WebContainerGitService {
   constructor(config = {}) {
     this.repoUrl = config.repoUrl;
     this.dir = config.dir || '/repo';
-    this.proxy = config.proxy || 'https://cors.isomorphic-git.org';
+    
+    // Automatically use the fast local git proxy to preserve Auth headers securely
+    const isLocalServer = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    this.proxy = config.proxy || (isLocalServer ? window.location.origin + '/git-proxy' : 'https://cors.isomorphic-git.org');
+    
     this.token = config.token;
     
     this.config = config;

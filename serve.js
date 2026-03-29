@@ -138,6 +138,45 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Git Cors Proxy for isomorphic-git (Because public proxies strip Auth headers)
+  if (req.url.startsWith('/git-proxy/')) {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-git-protocol'
+      });
+      res.end();
+      return;
+    }
+    
+    const gitUrl = 'https://' + req.url.replace('/git-proxy/', '');
+    const options = {
+      method: req.method,
+      headers: { ...req.headers }
+    };
+    
+    // Clean up headers before proxying
+    delete options.headers['host'];
+    delete options.headers['origin'];
+    delete options.headers['referer'];
+    
+    const proxyReq = https.request(gitUrl, options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, {
+        ...proxyRes.headers,
+        'Access-Control-Allow-Origin': '*'
+      });
+      proxyRes.pipe(res);
+    });
+    
+    proxyReq.on('error', (e) => {
+      res.writeHead(500);
+      res.end('Git Proxy Error: ' + e.message);
+    });
+    req.pipe(proxyReq);
+    return;
+  }
+
   let filePath = '.' + req.url.split('?')[0];
   // Map root to the main index.html (One-Pager)
   if (filePath === './') {
