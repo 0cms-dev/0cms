@@ -5,7 +5,8 @@
   "main": "serve.js",
   "scripts": {
     "start": "node serve.js",
-    "dev": "node serve.js"
+    "dev": "node serve.js",
+    "build": "node build.mjs"
   },
   "author": "ZeroCMS Team",
   "license": "MIT",
