@@ -17,7 +17,7 @@ async function build() {
   const result = await Bun.build({
     entrypoints: ["app.js"],
     outdir: ASSETS,
-    naming: "app.bundle.js",
+    naming: "app-[hash].js",
     minify: true,
     sourcemap: "external",
     target: "browser",
@@ -38,14 +38,18 @@ async function build() {
     await Bun.write(dest, Bun.file(src));
   }
 
+  // Extract the generated hashed file name from Bun's output
+  const jsOutput = result.outputs.find(out => out.path.endsWith('.js'));
+  const hashedFilename = jsOutput.path.split('/').pop();
+
   // 4. Transform index.html for Production
   console.log("📄 Processing index.html...");
   let html = await Bun.file("index.html").text();
   
-  // Replace the dev script tag with the production bundle
+  // Replace the dev script tag with the ABSOLUTE production bundle path (cache busted)
   html = html.replace(
-    '<script type="module" src="./app.js"></script>',
-    '<script type="module" src="./assets/app.bundle.js"></script>'
+    '<script type="module" src="/app.js"></script>',
+    `<script type="module" src="/assets/${hashedFilename}"></script>`
   );
 
   await Bun.write(join(DIST, "index.html"), html);
