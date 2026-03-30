@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zero-Config CMS Demo</title>
+    <title>0cms Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
     
     <!-- NITRO PRELOAD: Start warming up the engine in the background -->
     <link rel="modulepreload" href="/lib/isomorphic-git.js">
@@ -22,8 +22,8 @@
             --bg-tertiary: #f0f0f0;
             --text: #111827;
             --text-muted: #6b7280;
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
+            --primary: #7c3aed;
+            --primary-hover: #6d28d9;
             --border: #e5e7eb;
             --glass: rgba(255, 255, 255, 0.82);
             --card-bg: #ffffff;
@@ -74,16 +74,41 @@
             z-index: 100;
         }
         .logo { 
-            font-size: 1.5rem; 
-            font-weight: 800; 
-            letter-spacing: -0.04em; 
-            color: var(--text); 
             display: flex; 
             align-items: center; 
-            gap: 8px; 
-            cursor: default;
+            gap: 10px; 
+            text-decoration: none; 
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .logo svg { width: 24px; height: 24px; color: var(--primary); }
+        .logo:hover { transform: translateY(-1px); }
+        .logo:active { transform: scale(0.98); }
+
+        .logo-box { 
+            width: 32px; 
+            height: 32px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            position: relative;
+        }
+        .logo-box svg { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            filter: drop-shadow(0 0 12px rgba(124, 58, 237, 0.15));
+        }
+        .logo-text { display: none; }
+
+        .logo-display-card {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 4rem;
+            animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .logo-display-card .logo { gap: 16px; transform: scale(1.5); pointer-events: none; }
+        .logo-display-card .logo-box { width: 44px; height: 44px; }
+        .logo-display-card .logo-text { font-size: 2.2rem; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         nav ul { display: flex; gap: 2rem; list-style: none; }
         nav a { text-decoration: none; color: var(--text-muted); font-size: 0.93rem; font-weight: 500; transition: color 0.2s; }
         nav a:hover { color: var(--text); }
@@ -107,7 +132,7 @@
             font-size: 1.25rem; 
             color: var(--text-muted); 
             max-width: 600px; 
-            margin: 0 auto 2.5rem; 
+            margin: 0 auto 3rem; 
             line-height: 1.6; 
         }
 
@@ -469,8 +494,13 @@
 <body>
     <header>
         <div class="logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            0CMS
+            <div class="logo-box">
+                <svg viewBox="0 0 76 76" fill="none">
+                    <path d="M3 17C3 9.26801 9.26801 3 17 3H59C66.732 3 73 9.26801 73 17V59C73 66.732 66.732 73 59 73H17C9.26801 73 3 66.732 3 59V17Z" fill="var(--primary)" fill-opacity="0.07"/>
+                    <path d="M11.543 69.126C13.1641 70.0019 15.0202 70.5 17 70.5H23.6113V75.5H17C14.1699 75.5 11.4992 74.785 9.16602 73.5244L11.543 69.126ZM44.6113 70.5V75.5H31.3887V70.5H44.6113ZM66.834 73.5244C64.5008 74.785 61.8301 75.5 59 75.5H52.3887V70.5H59C60.9798 70.5 62.8359 70.0019 64.457 69.126L66.834 73.5244ZM0.5 59V52.3887H5.5V59C5.5 60.9798 5.99813 62.8359 6.87402 64.457L2.47559 66.834C1.21496 64.5008 0.5 61.8301 0.5 59ZM70.5 59V52.3887H75.5V59C75.5 61.8301 74.785 64.5008 73.5244 66.834L69.126 64.457C70.0019 62.8359 70.5 60.9798 70.5 59ZM5.5 31.3887V44.6113H0.5V31.3887H5.5ZM75.5 31.3887V44.6113H70.5V31.3887H75.5ZM0.5 17C0.5 14.1699 1.21496 11.4992 2.47559 9.16602L6.87402 11.543C5.99813 13.1641 5.5 15.0202 5.5 17V23.6113H0.5V17ZM70.5 17C70.5 15.0202 70.0019 13.1641 69.126 11.543L73.5244 9.16602C74.785 11.4992 75.5 14.1699 75.5 17V23.6113H70.5V17ZM23.6113 0.5V5.5H17C15.0202 5.5 13.1641 5.99813 11.543 6.87402L9.16602 2.47559C11.4992 1.21496 14.1699 0.5 17 0.5H23.6113ZM59 0.5C61.8301 0.5 64.5008 1.21496 66.834 2.47559L64.457 6.87402C62.8359 5.99813 60.9798 5.5 59 5.5H52.3887V0.5H59ZM44.6113 0.5V5.5H31.3887V0.5H44.6113Z" fill="var(--primary)" fill-opacity="0.9"/>
+                    <path d="M37.552 61.336C34.5867 61.336 32.1013 60.664 30.096 59.32C28.0907 57.976 26.4907 56.184 25.296 53.944C24.1227 51.6827 23.28 49.1867 22.768 46.456C22.256 43.7253 22 40.9627 22 38.168C22 36.2267 22.1387 34.1893 22.416 32.056C22.6933 29.9227 23.1733 27.8533 23.856 25.848C24.5387 23.8213 25.4667 21.9973 26.64 20.376C27.8347 18.7333 29.328 17.432 31.12 16.472C32.912 15.4907 35.056 15 37.552 15C40.5387 15 43.0347 15.6827 45.04 17.048C47.0453 18.392 48.6347 20.1947 49.808 22.456C51.0027 24.7173 51.856 27.2133 52.368 29.944C52.88 32.6747 53.136 35.416 53.136 38.168C53.136 40.1307 52.9867 42.1787 52.688 44.312C52.4107 46.424 51.9307 48.4933 51.248 50.52C50.5653 52.5253 49.6267 54.3493 48.432 55.992C47.2373 57.6347 45.744 58.936 43.952 59.896C42.1813 60.856 40.048 61.336 37.552 61.336ZM37.552 56.504C39.664 56.504 41.3707 55.9493 42.672 54.84C43.9947 53.7093 45.0187 52.2267 45.744 50.392C46.4693 48.5573 46.96 46.5733 47.216 44.44C47.4933 42.2853 47.632 40.1947 47.632 38.168C47.632 35.928 47.472 33.72 47.152 31.544C46.8533 29.368 46.3307 27.4053 45.584 25.656C44.8587 23.8853 43.8347 22.4667 42.512 21.4C41.2107 20.3333 39.5573 19.8 37.552 19.8C35.4613 19.8 33.744 20.376 32.4 21.528C31.056 22.6587 30.0213 24.1413 29.296 25.976C28.592 27.8107 28.1013 29.8053 27.824 31.96C27.5467 34.0933 27.408 36.1627 27.408 38.168C27.408 40.4293 27.5573 42.648 27.856 44.824C28.1547 47 28.6773 48.9733 29.424 50.744C30.1707 52.4933 31.2053 53.8907 32.528 54.936C33.8507 55.9813 35.5253 56.504 37.552 56.504ZM37.552 42.36C36.3787 42.36 35.3973 41.944 34.608 41.112C33.8187 40.2587 33.424 39.288 33.424 38.2C33.424 37.1333 33.8187 36.184 34.608 35.352C35.3973 34.4987 36.3787 34.072 37.552 34.072C38.7467 34.072 39.7387 34.4987 40.528 35.352C41.3173 36.184 41.712 37.1333 41.712 38.2C41.712 39.288 41.3173 40.2587 40.528 41.112C39.7387 41.944 38.7467 42.36 37.552 42.36Z" fill="var(--text)"/>
+                </svg>
+            </div>
         </div>
         <nav>
             <ul>
@@ -484,6 +514,17 @@
 
     <main>
         <section class="hero">
+            <div class="logo-display-card">
+                <div class="logo">
+                    <div class="logo-box">
+                        <svg viewBox="0 0 76 76" fill="none">
+                            <path d="M3 17C3 9.26801 9.26801 3 17 3H59C66.732 3 73 9.26801 73 17V59C73 66.732 66.732 73 59 73H17C9.26801 73 3 66.732 3 59V17Z" fill="var(--primary)" fill-opacity="0.07"/>
+                            <path d="M11.543 69.126C13.1641 70.0019 15.0202 70.5 17 70.5H23.6113V75.5H17C14.1699 75.5 11.4992 74.785 9.16602 73.5244L11.543 69.126ZM44.6113 70.5V75.5H31.3887V70.5H44.6113ZM66.834 73.5244C64.5008 74.785 61.8301 75.5 59 75.5H52.3887V70.5H59C60.9798 70.5 62.8359 70.0019 64.457 69.126L66.834 73.5244ZM0.5 59V52.3887H5.5V59C5.5 60.9798 5.99813 62.8359 6.87402 64.457L2.47559 66.834C1.21496 64.5008 0.5 61.8301 0.5 59ZM70.5 59V52.3887H75.5V59C75.5 61.8301 74.785 64.5008 73.5244 66.834L69.126 64.457C70.0019 62.8359 70.5 60.9798 70.5 59ZM5.5 31.3887V44.6113H0.5V31.3887H5.5ZM75.5 31.3887V44.6113H70.5V31.3887H75.5ZM0.5 17C0.5 14.1699 1.21496 11.4992 2.47559 9.16602L6.87402 11.543C5.99813 13.1641 5.5 15.0202 5.5 17V23.6113H0.5V17ZM70.5 17C70.5 15.0202 70.0019 13.1641 69.126 11.543L73.5244 9.16602C74.785 11.4992 75.5 14.1699 75.5 17V23.6113H70.5V17ZM23.6113 0.5V5.5H17C15.0202 5.5 13.1641 5.99813 11.543 6.87402L9.16602 2.47559C11.4992 1.21496 14.1699 0.5 17 0.5H23.6113ZM59 0.5C61.8301 0.5 64.5008 1.21496 66.834 2.47559L64.457 6.87402C62.8359 5.99813 60.9798 5.5 59 5.5H52.3887V0.5H59ZM44.6113 0.5V5.5H31.3887V0.5H44.6113Z" fill="var(--primary)" fill-opacity="0.9"/>
+                            <path d="M37.552 61.336C34.5867 61.336 32.1013 60.664 30.096 59.32C28.0907 57.976 26.4907 56.184 25.296 53.944C24.1227 51.6827 23.28 49.1867 22.768 46.456C22.256 43.7253 22 40.9627 22 38.168C22 36.2267 22.1387 34.1893 22.416 32.056C22.6933 29.9227 23.1733 27.8533 23.856 25.848C24.5387 23.8213 25.4667 21.9973 26.64 20.376C27.8347 18.7333 29.328 17.432 31.12 16.472C32.912 15.4907 35.056 15 37.552 15C40.5387 15 43.0347 15.6827 45.04 17.048C47.0453 18.392 48.6347 20.1947 49.808 22.456C51.0027 24.7173 51.856 27.2133 52.368 29.944C52.88 32.6747 53.136 35.416 53.136 38.168C53.136 40.1307 52.9867 42.1787 52.688 44.312C52.4107 46.424 51.9307 48.4933 51.248 50.52C50.5653 52.5253 49.6267 54.3493 48.432 55.992C47.2373 57.6347 45.744 58.936 43.952 59.896C42.1813 60.856 40.048 61.336 37.552 61.336ZM37.552 56.504C39.664 56.504 41.3707 55.9493 42.672 54.84C43.9947 53.7093 45.0187 52.2267 45.744 50.392C46.4693 48.5573 46.96 46.5733 47.216 44.44C47.4933 42.2853 47.632 40.1947 47.632 38.168C47.632 35.928 47.472 33.72 47.152 31.544C46.8533 29.368 46.3307 27.4053 45.584 25.656C44.8587 23.8853 43.8347 22.4667 42.512 21.4C41.2107 20.3333 39.5573 19.8 37.552 19.8C35.4613 19.8 33.744 20.376 32.4 21.528C31.056 22.6587 30.0213 24.1413 29.296 25.976C28.592 27.8107 28.1013 29.8053 27.824 31.96C27.5467 34.0933 27.408 36.1627 27.408 38.168C27.408 40.4293 27.5573 42.648 27.856 44.824C28.1547 47 28.6773 48.9733 29.424 50.744C30.1707 52.4933 31.2053 53.8907 32.528 54.936C33.8507 55.9813 35.5253 56.504 37.552 56.504ZM37.552 42.36C36.3787 42.36 35.3973 41.944 34.608 41.112C33.8187 40.2587 33.424 39.288 33.424 38.2C33.424 37.1333 33.8187 36.184 34.608 35.352C35.3973 34.4987 36.3787 34.072 37.552 34.072C38.7467 34.072 39.7387 34.4987 40.528 35.352C41.3173 36.184 41.712 37.1333 41.712 38.2C41.712 39.288 41.3173 40.2587 40.528 41.112C39.7387 41.944 38.7467 42.36 37.552 42.36Z" fill="var(--text)"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
             <h1>Zero Config.<br>Zero Friction.</h1>
             <p class="teaser">The fastest way to edit your Jamstack site. No setup, no database, no friction. Just open and edit.</p>
             
@@ -559,7 +600,7 @@
     </main>
 
     <footer>
-        <p>&copy; 2026 Zero-Config CMS. Built for the modern web.</p>
+        <p>&copy; 2026 0cms. Built for the modern web.</p>
     </footer>
 
     <!-- GLASS ADMIN BAR -->
@@ -575,7 +616,7 @@
         <div class="dashboard-main">
             <div id="previewLoader" class="preview-loader">
                 <div class="loader-spinner"></div>
-                <div id="cmsLoaderStatus" style="font-weight:600; color:var(--text); font-size:0.9rem; margin-top:16px; letter-spacing:-0.01em;">Initializing ZeroCMS...</div>
+                <div id="cmsLoaderStatus" style="font-weight:600; color:var(--text); font-size:0.9rem; margin-top:16px; letter-spacing:-0.01em;">Initializing 0cms...</div>
             </div>
             
             <div class="hud-container">
@@ -785,11 +826,7 @@
             localStorage.setItem('zcms-settings', JSON.stringify(settings));
             // Clean up the URL for a premium zero-config look
             window.history.replaceState({}, document.title, window.location.pathname);
-            
-            // Auto-trigger picker/fetch if we just logged in
-            ui.stepLogin.classList.add('hidden');
-            ui.stepPicker.classList.remove('hidden');
-            fetchRepos();
+            // fetchRepos() will be called by refreshLandingUI() below
         }
 
         let cmsActive = false;
@@ -801,6 +838,7 @@
         // 0. UI REFRESH: Project Awareness
         function refreshLandingUI() {
             if (settings.token) {
+                // User is connected! UI should reflect this "forever"
                 ui.landingLoginBtn.classList.add('hidden');
                 ui.landingRepoSection.classList.remove('hidden');
                 
@@ -814,11 +852,14 @@
                     fetchRepos(); // Just show global list
                 }
             } else {
+                // Fresh start - show connect action
                 ui.landingLoginBtn.classList.remove('hidden');
                 ui.landingProject.classList.add('hidden');
                 ui.landingRepoSection.classList.add('hidden');
             }
         }
+        
+        // Unconditionally refresh UI state on load to ensure persistence
         refreshLandingUI();
 
         // 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo
@@ -860,8 +901,8 @@
             }, 400);
         };
 
-        ui.loginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms-dev/installations/new';
-        ui.landingLoginBtn.onclick = () => window.location.href = 'https://github.com/apps/0cms-dev/installations/new';
+        ui.loginBtn.onclick = () => window.location.href = '/github/login';
+        ui.landingLoginBtn.onclick = () => window.location.href = '/github/login';
         
         ui.backToLoginBtn.onclick = () => {
             ui.stepPicker.classList.add('hidden');
@@ -961,7 +1002,9 @@
             }
             // Existing ones are handled in cms.js globally, but we intercept SEO here
             if (e.data.type === 'CMS_READY') {
-                // ...
+                showToast('Visual Editor Ready', 'success');
+                ui.previewLoader.classList.add('hidden');
+                ui.statusDot.className = 'status-dot';
             }
         });
 
@@ -1060,9 +1103,9 @@
             ui.repoList.innerHTML = '';
             ui.landingRepoList.innerHTML = '';
             try {
-                let apiUrl = 'https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all';
+                let apiUrl = '/github/api/user/repos?sort=updated&per_page=100&visibility=all';
                 if (settings.installation_id) {
-                    apiUrl = `https://api.github.com/user/installations/${settings.installation_id}/repositories`;
+                    apiUrl = `/github/api/user/installations/${settings.installation_id}/repositories`;
                 }
 
                 const res = await fetch(apiUrl, {
@@ -1097,10 +1140,29 @@
                     return;
                 }
 
+                // If we have repositories, make sure the landing section is visible
+                ui.landingRepoSection.classList.remove('hidden');
+
                 // Auto-select if only one repo and we just came from an install
                 if (repos.length === 1 && settings.installation_id) {
-                    selectRepo(repos[0].full_name);
-                    return;
+                    // Just save the repo, don't open the dashboard
+                    settings.repo = repos[0].full_name;
+                    settings.installation_id = null;
+                    localStorage.setItem('zcms-settings', JSON.stringify(settings));
+                    ui.stepPicker.classList.add('hidden');
+                    ui.landingProject.classList.remove('hidden');
+                    ui.landingRepoName.textContent = settings.repo;
+                    // Don't return - still populate the repo list below
+                }
+
+                // If no active repo is set, auto-select the most recently updated one
+                if (!settings.repo && repos.length > 0) {
+                    settings.repo = repos[0].full_name;
+                    localStorage.setItem('zcms-settings', JSON.stringify(settings));
+                    ui.stepPicker.classList.add('hidden');
+                    ui.landingProject.classList.remove('hidden');
+                    ui.landingRepoName.textContent = settings.repo;
+                    // Don't start the engine automatically - wait for user to click "Open Dashboard"
                 }
 
                 repos.forEach(repo => {
@@ -1110,6 +1172,9 @@
                     item.onclick = () => selectRepo(repo.full_name);
                     item.innerHTML = `<div><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
                     ui.repoList.appendChild(item);
+
+                    // Skip the active repo in the "all projects" list to avoid duplication
+                    if (repo.full_name === settings.repo) return;
 
                     // Update Landing list...
                     const card = document.createElement('div');
@@ -1164,7 +1229,7 @@
 
             if (e.data.type === 'CMS_CHANGED') {
                 changes = e.data.changes;
-                const entries = e.data.entries || [];
+                entries = e.data.entries || [];  // update outer variable (not const!)
                 const count = Object.keys(changes).length;
                 ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
                 
@@ -1267,10 +1332,33 @@
              const oldHTML = ui.saveBtn.innerHTML;
              ui.saveBtn.innerHTML = 'Publishing...';
              try {
+                // STEP 1: Apply all visual changes to source files in WebContainer
+                if (entries && entries.length > 0) {
+                    showToast(`Applying ${entries.length} change(s) to source...`, 'info');
+                    let applied = 0;
+                    for (const entry of entries) {
+                        if (entry.original !== undefined && entry.updated !== undefined && entry.original !== entry.updated) {
+                            try {
+                                const ok = await cmsService.applySmartMatchChange(
+                                    entry.original,
+                                    entry.updated,
+                                    entry.sourceFile || null
+                                );
+                                if (ok) applied++;
+                            } catch (matchErr) {
+                                console.warn('[CMS] SmartMatch failed for:', entry.selector, matchErr.message);
+                            }
+                        }
+                    }
+                    console.log(`[CMS] Applied ${applied}/${entries.length} changes to source files.`);
+                }
+
+                // STEP 2: Commit & Push
                 showToast('Syncing to GitHub...', 'info');
                 await cmsService.publishChanges('Visual update via ZeroCMS');
+
+                // STEP 3: Clear local draft
                 ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
-                
                 showToast('Changes published successfully!', 'success');
              } catch (e) { 
                  showToast(e.message, 'error'); 
@@ -1280,15 +1368,6 @@
              }
         };
 
-        // Check for token in URL (extracted at the top of the script)
-        if (tokenFromUrl) {
-            ui.btnToggle.click();
-            if (!settings.repo) {
-                ui.stepLogin.classList.add('hidden');
-                ui.stepPicker.classList.remove('hidden');
-                fetchRepos();
-            }
-        }
     </script>
 </body>
 </html>

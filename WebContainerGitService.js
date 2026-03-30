@@ -94,7 +94,8 @@ export class WebContainerGitService {
           dir: this.dir,
           url: this.repoUrl,
           corsProxy: this.proxy,
-          onAuth: () => ({ username: this.token }),
+          onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+          onAuthFailure: () => { throw new Error('GitHub authentication failed. Please check your token.'); },
           singleBranch: true,
           fastForwardOnly: true,
           author: { name: 'CMS Sync', email: 'cms@example.com' }
@@ -142,7 +143,8 @@ export class WebContainerGitService {
         dir: this.dir,
         url: this.repoUrl,
         corsProxy: this.proxy,
-        onAuth: () => ({ username: this.token }),
+        onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+        onAuthFailure: () => { throw new Error('GitHub authentication failed. Please check your token.'); },
         singleBranch: true,
         depth: 1,
         onMessage: msg => this.onStatusChange(`Git: ${msg}`)
@@ -494,7 +496,8 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       http: (await import('/lib/isomorphic-git-http.js')).default,
       dir: this.dir,
       url: this.repoUrl,
-      onAuth: () => ({ username: this.token }),
+      onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+      onAuthFailure: () => { throw new Error('GitHub authentication failed. Check that your token has the "repo" scope.'); },
       corsProxy: this.proxy
     });
 
@@ -759,7 +762,8 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       dir: this.dir,
       url: this.repoUrl,
       force: true, // IMPORTANT: Force push to overwrite remote history
-      onAuth: () => ({ username: this.token }),
+      onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+      onAuthFailure: () => { throw new Error('GitHub authentication failed. Check that your token has the "repo" scope.'); },
       corsProxy: this.proxy
     });
 

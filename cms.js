@@ -192,32 +192,43 @@ class ZeroConfigCMS {
     const style = document.createElement('style');
     style.id = this.styleId;
     style.textContent = `
-      @keyframes cmsGlowPulse {
-        0% { outline-color: rgba(138, 43, 226, 0.4); box-shadow: 0 0 10px rgba(138, 43, 226, 0.2); }
-        50% { outline-color: rgba(138, 43, 226, 0.9); box-shadow: 0 0 20px rgba(138, 43, 226, 0.4); }
-        100% { outline-color: rgba(138, 43, 226, 0.4); box-shadow: 0 0 10px rgba(138, 43, 226, 0.2); }
+      @keyframes cmsDraftPulse {
+        0% { outline-color: rgba(124, 58, 237, 0.4); box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); }
+        50% { outline-color: rgba(124, 58, 237, 0.9); box-shadow: 0 0 20px rgba(124, 58, 237, 0.4); }
+        100% { outline-color: rgba(124, 58, 237, 0.4); box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); }
+      }
+      @keyframes cmsSelectPulse {
+        0% { outline-color: rgba(59, 130, 246, 0.4); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
+        50% { outline-color: rgba(59, 130, 246, 0.9); box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+        100% { outline-color: rgba(59, 130, 246, 0.4); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
       }
 
       .cms-editable { 
         transition: background-color 0.3s ease, border-radius 0.3s ease; 
         border-radius: 4px;
-        outline: 2px solid transparent; 
+        outline: 2px dashed transparent; 
         outline-offset: 2px;
       }
       
-      .cms-editable:hover { 
+      .cms-editable:hover:not(:focus) { 
         cursor: text; 
         border-radius: 6px !important; 
-        outline: 2px solid rgba(138, 43, 226, 0.8) !important;
-        outline-offset: 6px !important; /* Creates padding visually without shifting layout */
-        background-color: rgba(138, 43, 226, 0.05);
-        animation: cmsGlowPulse 2s infinite ease-in-out !important; 
+        outline: 2px dashed rgba(59, 130, 246, 0.8) !important;
+        outline-offset: 6px !important; 
+        background-color: rgba(59, 130, 246, 0.05);
+        animation: cmsSelectPulse 2s infinite ease-in-out !important; 
         position: relative; z-index: 9999;
+      }
+      
+      .cms-editable.cms-edited:hover:not(:focus) {
+        outline-color: rgba(  0.9) !important;
+        background-color: rgba(124, 58, 237, 0.05);
+        animation: cmsDraftPulse 2s infinite ease-in-out !important;
       }
       
       .cms-editable:focus { 
         border-radius: 6px !important;
-        outline: 2px solid #2ecc71 !important;
+        outline: 2px solid #10b981 !important;
         outline-offset: 6px !important; 
         background-color: rgba(46, 204, 113, 0.05); 
         box-shadow: 0 0 15px rgba(46, 204, 113, 0.3) !important;
@@ -227,12 +238,16 @@ class ZeroConfigCMS {
       .cms-img-container { position: relative; display: inline-block; vertical-align: middle; max-width: 100%; transition: all 0.3s ease; }
       .cms-img-container img { cursor: crosshair; transition: all 0.3s ease; border-radius: 4px; outline: 2px solid transparent; outline-offset: 2px; }
       
-      .cms-img-container:hover img { 
+      .cms-img-container:hover:not(.focused) img { 
         transform: scale(1.02); 
         border-radius: 8px !important;
-        outline: 2px solid rgba(138, 43, 226, 0.8) !important;
+        outline: 2px dashed rgba(59, 130, 246, 0.8) !important;
         outline-offset: 6px !important;
-        animation: cmsGlowPulse 2s infinite ease-in-out !important;
+        animation: cmsSelectPulse 2s infinite ease-in-out !important;
+      }
+      .cms-img-container.cms-edited:hover:not(.focused) img {
+        outline-color: rgba(124, 58, 237, 0.9) !important;
+        animation: cmsDraftPulse 2s infinite ease-in-out !important;
       }
 
       .cms-img-overlay, .cms-block-menu { 
@@ -269,9 +284,9 @@ class ZeroConfigCMS {
       .cms-diff-content { font-size: 14px; line-height: 1.5; color: #10b981; font-weight: 500; }
 
       .cms-highlight {
-        outline: 4px solid var(--primary) !important;
+        outline: 4px dashed rgba(124, 58, 237, 0.8) !important;
         outline-offset: 4px !important;
-        box-shadow: 0 0 30px rgba(138, 43, 226, 0.5) !important;
+        box-shadow: 0 0 30px rgba(124, 58, 237, 0.5) !important;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
         z-index: 10001 !important;
         position: relative !important;
@@ -378,10 +393,10 @@ class ZeroConfigCMS {
     const prevValue = el ? (el.tagName === 'IMG' ? el.src : (el.tagName === 'META' ? el.getAttribute('content') : el.innerText)) : this.changes[selector];
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // 1. Update changes map immediately for persistence and sync
     this.changes[selector] = content;
     localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
     window.dispatchEvent(new CustomEvent('cms-changed', { detail: this.changes }));
+    this.updateStatus(el, selector);
     this.notifyParent();
 
     // 2. Debounce history entry (to avoid flooding with every keystroke)
@@ -407,9 +422,17 @@ class ZeroConfigCMS {
     const el = document.querySelector(selector);
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('cms-highlight');
-        setTimeout(() => el.classList.remove('cms-highlight'), 2000);
+        const target = el.tagName === 'IMG' ? el.parentElement : el;
+        target.classList.add('cms-highlight');
+        setTimeout(() => target.classList.remove('cms-highlight'), 2000);
     }
+  }
+
+  updateStatus(el, selector) {
+    if (!el) return;
+    const target = el.tagName === 'IMG' ? el.parentElement : el;
+    const isEdited = this.changes[selector] !== undefined;
+    target.classList.toggle('cms-edited', isEdited);
   }
 
   undo() {
@@ -427,6 +450,7 @@ class ZeroConfigCMS {
         else if (el.tagName === 'META') el.setAttribute('content', action.old);
         else el.innerText = action.old;
     }
+    this.updateStatus(el, action.selector);
     this.notifyParent();
   }
 
@@ -455,6 +479,7 @@ class ZeroConfigCMS {
         if (el.tagName === 'IMG') el.src = content;
         else if (el.tagName === 'META') el.setAttribute('content', content);
         else el.innerText = content;
+        this.updateStatus(el, selector);
       }
     }
     // Final notification after batch apply

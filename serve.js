@@ -148,6 +148,41 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // GitHub API Proxy (COEP/CORS Bypass)
+  if (req.url.startsWith('/github/api/')) {
+    const apiPath = req.url.replace('/github/api/', '');
+    const options = {
+      hostname: 'api.github.com',
+      port: 443,
+      path: '/' + apiPath,
+      method: req.method,
+      headers: { ...req.headers }
+    };
+
+    // Keep only essential headers
+    delete options.headers['host'];
+    delete options.headers['origin'];
+    delete options.headers['referer'];
+    options.headers['User-Agent'] = 'ZeroCMS-App';
+    options.headers['Accept'] = 'application/vnd.github.v3+json';
+
+    const apiReq = https.request(options, (apiRes) => {
+      res.writeHead(apiRes.statusCode, {
+        ...apiRes.headers,
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin'
+      });
+      apiRes.pipe(res);
+    });
+
+    apiReq.on('error', (e) => {
+      res.writeHead(500);
+      res.end('API Proxy Error: ' + e.message);
+    });
+    req.pipe(apiReq);
+    return;
+  }
+
   // Git Cors Proxy for isomorphic-git (Because public proxies strip Auth headers)
   if (req.url.startsWith('/git-proxy/')) {
     if (req.method === 'OPTIONS') {
@@ -172,7 +207,11 @@ const server = http.createServer((req, res) => {
     delete options.headers['referer'];
     
     const proxyReq = https.request(gitUrl, options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, {
+      // IMPORTANT: Transform 401 → 400 to prevent the browser from showing
+      // its native "Sign in to localhost" Basic Auth dialog.
+      // isomorphic-git's onAuth/onAuthFailure handles authentication itself.
+      const statusCode = proxyRes.statusCode === 401 ? 400 : proxyRes.statusCode;
+      res.writeHead(statusCode, {
         ...proxyRes.headers,
         'Access-Control-Allow-Origin': '*'
       });
