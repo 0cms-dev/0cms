@@ -94,7 +94,6 @@ if (ui.accountSwitcherBtn) {
         const isOpen = ui.accountDropdown.classList.contains('open');
         ui.accountDropdown.classList.toggle('open', !isOpen);
         ui.accountSwitcherBtn.classList.toggle('active', !isOpen);
-        console.log('[CMS] Toggle Dropdown:', !isOpen);
     };
 }
 
@@ -442,13 +441,27 @@ async function fetchInstallations() {
         const data = await res.json();
         installations = data.installations || [];
         
+        // NEW: Try to get the App slug to provide a better "Manage" link
+        let appSlug = '0cms-dev'; // fallback
+        try {
+            const appRes = await fetch('/github/api/app');
+            const appData = await appRes.json();
+            if (appData.slug) appSlug = appData.slug;
+        } catch (e) {}
+
         if (installations.length > 0) {
             installations.forEach(inst => {
                 const item = document.createElement('div');
                 item.className = 'dropdown-item';
+                item.style.justifyContent = 'space-between';
                 item.innerHTML = `
-                    <img src="${inst.account.avatar_url}" class="account-avatar">
-                    <span>${inst.account.login}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <img src="${inst.account.avatar_url}" class="account-avatar">
+                        <span>${inst.account.login}</span>
+                    </div>
+                    <a href="https://github.com/settings/installations/${inst.id}" target="_blank" class="account-settings-btn" title="Settings" onclick="event.stopPropagation()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </a>
                 `;
                 item.onclick = (e) => {
                     e.stopPropagation();
@@ -483,7 +496,7 @@ async function fetchInstallations() {
         `;
         manageItem.onclick = (e) => {
             e.stopPropagation();
-            window.open('https://github.com/settings/installations', '_blank');
+            window.open(`https://github.com/apps/${appSlug}/installations/select_target`, '_blank');
         };
         ui.accountDropdown.appendChild(manageItem);
 
@@ -517,9 +530,9 @@ async function selectInstallation(inst) {
             method: 'POST'
         });
         const data = await res.json();
+        
         if (data.token) {
             currentInstallationToken = data.token;
-            console.log(`[CMS] Using installation token for ${inst.account.login}`);
         } else {
             currentInstallationToken = null;
         }
@@ -670,9 +683,7 @@ window.onmessage = (e) => {
                     lastEntry.original, 
                     lastEntry.updated, 
                     lastEntry.sourceFile || null
-                 ).then(ok => {
-                     if (ok) console.log(`[CMS] Autosynced: ${lastEntry.selector}`);
-                 }).catch(err => {
+                 ).catch(err => {
                      console.error('[CMS] Autosync failed:', err);
                  });
             }

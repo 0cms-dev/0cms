@@ -1,41 +1,23 @@
+// --- CONFIGURATION ---
+// Bun and modern Node.js (with --env-file) load .env automatically.
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'YOUR_CLIENT_ID';
+const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const APP_ID = process.env.GITHUB_APP_ID;
+
+// Normalize Private Key: handle both real newlines and escaped \n
+let PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY;
+if (PRIVATE_KEY && PRIVATE_KEY.includes('\\n')) {
+  PRIVATE_KEY = PRIVATE_KEY.replace(/\\n/g, '\n');
+}
+if (PRIVATE_KEY && PRIVATE_KEY.startsWith('"') && PRIVATE_KEY.endsWith('"')) {
+  PRIVATE_KEY = PRIVATE_KEY.slice(1, -1);
+}
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
 const PORT = 3000;
-
-// Simple .env parser to keep it Zero-Config
-function loadEnv() {
-  try {
-    const envPath = path.resolve(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      const lines = content.split(/\r?\n/);
-      for (let line of lines) {
-        line = line.trim();
-        if (!line || line.startsWith('#')) continue;
-        const index = line.indexOf('=');
-        if (index === -1) continue;
-        const key = line.slice(0, index).trim();
-        let value = line.slice(index + 1).trim();
-        if (value.startsWith('"') && value.endsWith('"')) {
-          value = value.slice(1, -1).replace(/\\n/g, '\n');
-        }
-        process.env[key] = value;
-      }
-    }
-  } catch (e) {
-    console.error('Error loading .env file:', e);
-  }
-}
-loadEnv();
-
-const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'YOUR_CLIENT_ID';
-const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
-const APP_ID = process.env.GITHUB_APP_ID;
-const PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY;
-
 const crypto = require('crypto');
 
 function base64Url(str) {
@@ -189,8 +171,7 @@ const server = http.createServer((req, res) => {
     
     // Special handling for App-Level tokens
     let authHeader = req.headers['authorization'];
-    if (apiPath.includes('/access_tokens') && APP_ID && PRIVATE_KEY) {
-       console.log('[CMS] Generating App JWT for installation token exchange');
+    if ((apiPath === 'app' || apiPath.includes('/access_tokens')) && APP_ID && PRIVATE_KEY) {
        authHeader = `Bearer ${generateAppJWT()}`;
     }
 
@@ -332,5 +313,11 @@ server.listen(PORT, () => {
   console.log(`\x1b[33mOpen http://localhost:${PORT} to start the CMS.\x1b[0m`);
   if (CLIENT_ID === 'YOUR_CLIENT_ID') {
     console.log(`\x1b[31m[!] GITHUB_CLIENT_ID is not configured. OAuth will not work.\x1b[0m`);
+  }
+  if (!APP_ID) {
+    console.log(`\x1b[33m[!] GITHUB_APP_ID not found. Organization support disabled.\x1b[0m`);
+  }
+  if (!PRIVATE_KEY) {
+    console.log(`\x1b[33m[!] GITHUB_PRIVATE_KEY not found. Organization support disabled.\x1b[0m`);
   }
 });
