@@ -85,7 +85,16 @@ let entries = [];
 let currentRepos = [];
 let installations = [];
 let selectedInstallationId = null;
+let currentInstallationToken = null;
 
+function getActiveToken() {
+    if (currentInstallationToken) return currentInstallationToken;
+    try {
+        const d = JSON.parse(localStorage.getItem('zcms-inst'));
+        if (d && d.token && d.expires > Date.now()) return d.token;
+    } catch (e) {}
+    return settings.token;
+}
 
 // --- EVENT LISTENERS (CRITICAL FIRST) ---
 if (ui.accountSwitcherBtn) {
@@ -122,7 +131,7 @@ if (localStorage.getItem('zcms-dashboard-open') === 'true' && settings.repo && s
 const preWarmingService = new WebContainerGitService();
 if (settings.repo && settings.token) {
     preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
-    preWarmingService.token = settings.token;
+    preWarmingService.token = getActiveToken();
     preWarmPromise = preWarmingService.initWebContainer()
         .then(() => preWarmingService.boot(preWarmingService.repoUrl, localStorage.getItem('zcms-manual-command')))
         .catch(e => console.error('Pre-warm failed:', e));
@@ -137,7 +146,7 @@ ui.btnToggle.onclick = () => {
     if (settings.repo && settings.token) {
         ui.stepLogin.classList.add('hidden');
         ui.stepPicker.classList.add('hidden');
-        startCmsEngine(settings.repo, settings.token);
+        startCmsEngine(settings.repo, getActiveToken());
     } else if (settings.token) {
         ui.stepLogin.classList.add('hidden');
         ui.stepPicker.classList.remove('hidden');
@@ -510,8 +519,6 @@ async function fetchInstallations() {
     }
 }
 
-let currentInstallationToken = null;
-
 async function selectInstallation(inst) {
     selectedInstallationId = inst.id;
     settings.installation_id = inst.id;
@@ -533,12 +540,15 @@ async function selectInstallation(inst) {
         
         if (data.token) {
             currentInstallationToken = data.token;
+            localStorage.setItem('zcms-inst', JSON.stringify({ token: data.token, expires: Date.now() + 55 * 60000 }));
         } else {
             currentInstallationToken = null;
+            localStorage.removeItem('zcms-inst');
         }
     } catch (err) {
         console.error('Failed to get installation token, falling back to user token', err);
         currentInstallationToken = null;
+        localStorage.removeItem('zcms-inst');
     }
 
     fetchRepos(inst.id);
@@ -555,7 +565,7 @@ async function fetchRepos(installationId = null) {
     try {
         const path = installationId ? `user/installations/${installationId}/repositories` : 'user/repos?sort=updated&per_page=100';
         const res = await fetch(`/github/api/${path}`, {
-            headers: { 'Authorization': `Bearer ${currentInstallationToken || settings.token}` }
+            headers: { 'Authorization': `Bearer ${getActiveToken()}` }
         });
         
         let data = await res.json();
@@ -633,7 +643,7 @@ function selectRepo(name) {
     ui.stepPicker.classList.add('hidden');
     refreshLandingUI();
     // Start the engine
-    startCmsEngine(name, settings.token);
+    startCmsEngine(name, getActiveToken());
     // Explicitly open the dashboard UI
     if (ui.dashboard.style.display !== 'flex') {
         ui.btnToggle.click();
