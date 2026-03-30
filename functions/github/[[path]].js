@@ -100,8 +100,8 @@ app.all('/api/:path{.+}', async (c) => {
   headers.set('Accept', 'application/vnd.github.v3+json');
 
   // Special handling for App Auth (Installation Tokens)
-  if (apiPath.includes('/access_tokens') && c.env.GITHUB_APP_ID && c.env.GITHUB_PRIVATE_KEY) {
-      console.log('[CMS] Cloudflare: Generating App JWT');
+  if ((apiPath === 'app' || apiPath.includes('/access_tokens')) && c.env.GITHUB_APP_ID && c.env.GITHUB_PRIVATE_KEY) {
+      console.log(`[CMS] Cloudflare: Generating App JWT for ${apiPath}`);
       const jwt = await generateAppJWT(c.env);
       if (jwt) headers.set('Authorization', `Bearer ${jwt}`);
   }
