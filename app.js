@@ -303,7 +303,7 @@ async function startCmsEngine(repo, token) {
         ui.preview.onload = () => {
             ui.preview.contentWindow.postMessage({ 
                 type: 'CMS_CONFIG', 
-                proxyUrl: 'https://wsrv.nl/?url='
+                proxyUrl: `${window.location.origin}/proxy?url=`
             }, '*');
             ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
         };
@@ -448,7 +448,12 @@ function selectRepo(name) {
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
     ui.stepPicker.classList.add('hidden');
     refreshLandingUI();
+    // Start the engine
     startCmsEngine(name, settings.token);
+    // Explicitly open the dashboard UI
+    if (ui.dashboard.style.display !== 'flex') {
+        ui.btnToggle.click();
+    }
 }
 
 function showToast(msg, type) {

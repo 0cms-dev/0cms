@@ -276,7 +276,8 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 
           'Content-Type': contentType,
           'Cross-Origin-Embedder-Policy': 'require-corp',
-          'Cross-Origin-Opener-Policy': 'same-origin'
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Permissions-Policy': 'interest-cohort=()'
       });
       res.end(content, 'utf-8');
     }
