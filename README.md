@@ -43,6 +43,22 @@ ZeroCMS uses a unique high-performance architecture:
 - **Visual Bridge**: A zero-config postMessage bridge that allows the host to edit the iframe content in-place.
 - **Binary Snapshots**: Uses `tar` blobs in IndexedDB to skip `npm install` for previously loaded repositories.
 
+## 🛡️ Security & Sandboxing
+
+ZeroCMS is designed with a **Zero-Trust** security model. Running untrusted code (like `npm run dev`) from a third-party repository is safer here than on your local machine:
+
+1. **Browser Sandbox**: The entire Node.js runtime (WebContainer) executes inside the browser's security sandbox.
+2. **Total Isolation**: Malicious scripts cannot "break out" of the browser tab. They have **no access** to your local files, system registry, passwords, or local network.
+3. **Disposable Environments**: Every session is isolated. If a repository contains harmful code, it only affects its own virtual filesystem within that specific tab. Closing the tab wipes the environment completely.
+
+## 🚀 Framework Support
+
+ZeroCMS is framework-agnostic and automatically detects your project structure. Each example repository in the [examples/](file:///Users/martin/Documents/Projects/0CMS/examples/) directory contains its own live demo link and specific configuration details.
+
+Supported frameworks include:
+- **Active**: Next.js, Astro, Hexo, Hugo, Eleventy, VitePress.
+- **Beta**: Nuxt, SvelteKit, Jekyll, Zola.
+
 ## 🤝 Contributing & Self-Hosting
 
 ZeroCMS is an open-source project. If you wish to self-host or contribute to the core:

@@ -1,6 +1,7 @@
 import git from '/lib/isomorphic-git.js';
 import FS from '/lib/lightning-fs.js';
 import { WebContainer } from '/lib/webcontainer-api.js';
+import { FRAMEWORKS, GENERIC_VITE } from './Frameworks.js';
 /**
  * WebContainerGitService
  * Orchestrates Git operations in browser-persistent storage and 
@@ -34,6 +35,9 @@ export class WebContainerGitService {
     
     // Track files actually modified by applySmartMatchChange so we know what to sync
     this._modifiedFiles = new Set();
+
+    // Framework detection
+    this.detectedFramework = null;
   }
 
   /**
@@ -66,6 +70,9 @@ export class WebContainerGitService {
       await this.loadSnapshot(); // Restore node_modules snapshot if available
       await this.installDependencies();
       
+      // AUTO-DETECT FRAMEWORK
+      await this.autoDetectFramework();
+
       this.onStatusChange('Starting Dev Server...');
       await this.startDevServer(manualCommand);
       
@@ -275,66 +282,53 @@ server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge 
     
     await this.webcontainerInstance.fs.writeFile('zcms-bridge.js', bridgeContent);
     await this.webcontainerInstance.fs.writeFile('zcms-middleware.js', middlewareContent);
-
-    // 2. Inject Tagger plugins for specific frameworks
-    await this.createTaggerPlugin();
-
-    // 3. The actual process spawning is handled in startDevServer after we know the port
   }
 
-  async createTaggerPlugin() {
-    this.onStatusChange('Creating Tagger Plugin...');
-    
-    // Check for Hexo (uses scripts/ folder for local plugins)
+  /**
+   * Identifies the framework by checking package.json and file signatures.
+   */
+  async autoDetectFramework() {
     try {
-      const packageJsonContent = await this.webcontainerInstance.fs.readFile('/package.json', 'utf8');
-      const pkg = JSON.parse(packageJsonContent);
+      this.onLog('[Auto-Detect] Scanning for framework signals...');
+      const pkgRaw = await this.webcontainerInstance.fs.readFile('/package.json', 'utf8').catch(() => null);
+      const rootFiles = await this.webcontainerInstance.fs.readdir('/').catch(() => []);
+      
+      const pkg = pkgRaw ? JSON.parse(pkgRaw) : {};
       const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
-      if (deps['hexo'] || deps['hexo-cli']) {
-        this.onLog('[Tagger] Hexo detected. Injecting scripts/zcms-tagger.js');
-        const hexoTagger = `
-hexo.extend.filter.register('after_render:html', function(html, data) {
-  if (data.source) {
-    // Inject source file path into body tag
-    const sourcePath = 'source/' + data.source;
-    return html.replace('<body', '<body data-cms-source="' + sourcePath + '"');
-  }
-  return html;
-});
-        `;
-        await this.webcontainerInstance.fs.mkdir('scripts', { recursive: true });
-        await this.webcontainerInstance.fs.writeFile('scripts/zcms-tagger.js', hexoTagger);
+      // 1. Layered Detection: Match profiles from Frameworks.js
+      let match = FRAMEWORKS.find(fw => {
+        // Dependency Match
+        const depMatch = fw.signals.deps && fw.signals.deps.some(d => deps[d]);
+        // File Signature Match
+        const fileMatch = fw.signals.files && fw.signals.files.some(f => rootFiles.includes(f));
+        return depMatch || fileMatch;
+      });
+
+      // 2. Generic Vite Fallback
+      if (!match) {
+        const isVite = GENERIC_VITE.signals.deps.some(d => deps[d]) || rootFiles.includes('vite.config.js') || rootFiles.includes('vite.config.ts');
+        if (isVite) match = GENERIC_VITE;
       }
-      
-      // Astro doesn't need an injection, it has data-astro-source-file in dev
-      
-      // Check for Vite (common in Vue/React/Svelte)
-      if (deps['vite']) {
-        this.onLog('[Tagger] Vite detected. Injecting vite.config.js wrapper...');
-        const vitePlugin = `
-const qcmsTagger = () => ({
-  name: 'qcms-tagger',
-  transform(code, id) {
-    if (id.endsWith('.jsx') || id.endsWith('.tsx') || id.endsWith('.vue') || id.endsWith('.svelte')) {
-      const relativeId = id.replace(process.cwd(), '');
-      // Simple regex to inject data-cms-source into the first tag of a component
-      // This is a heuristic - in production we'd use a proper parser
-      if (code.includes('<') && !code.includes('data-cms-source')) {
-        return code.replace(/<([a-zA-Z0-9]+)/, '<$1 data-cms-source="' + relativeId + '"');
-      }
-    }
-    return null;
-  }
-});
-export default qcmsTagger;
-`;
-        await this.webcontainerInstance.fs.writeFile('qcms-vite-plugin.js', vitePlugin);
-        // Note: For a real zero-config, we'd need to dynamically wrap the existing vite.config.js
-        // but for now we'll just log and let the user know, or try to append if it's simple.
+
+      if (match) {
+        this.detectedFramework = match;
+        this.onLog(`[Auto-Detect] Matched Profile: ${match.name}`);
+        
+        // Auto-inject tagger if defined
+        if (match.tagger) {
+          const taggerCode = match.tagger();
+          if (match.id === 'hexo') {
+            await this.webcontainerInstance.fs.mkdir('scripts', { recursive: true });
+            await this.webcontainerInstance.fs.writeFile('scripts/zcms-tagger.js', taggerCode);
+          }
+          // Note: Vite/Next.js/Astro tagging can be added here as we expand
+        }
+      } else {
+        this.onLog('[Auto-Detect] No specific framework profile matched. Using generic defaults.');
       }
     } catch (e) {
-      this.onLog(`[Warning] Tagger injection failed: ${e.message}`);
+      this.onLog(`[Warning] Auto-detection failed: ${e.message}`);
     }
   }
 
@@ -381,48 +375,34 @@ export default qcmsTagger;
   }
 
   async startDevServer(manualCommand = null) {
-    const FRAMEWORK_DEFAULTS = {
-      'hexo': 'npx hexo server',
-      'astro': 'npx astro dev',
-      'nuxt': 'npx nuxi dev',
-      'next': 'npx next dev',
-      'vite': 'npx vite',
-      'eleventy': 'npx @11ty/eleventy --serve',
-      'docusaurus': 'npx docusaurus start',
-      'vitepress': 'npx vitepress dev'
-    };
-
-    let devCommand = manualCommand || 'npm run dev';
+    let devCommand = manualCommand;
     
     // Auto-detection logic if no manual command provided
-    if (!manualCommand) {
+    if (!devCommand) {
       try {
-        const packageJsonContent = await this.webcontainerInstance.fs.readFile('/package.json', 'utf-8');
-        const pkg = JSON.parse(packageJsonContent);
-        const scripts = pkg.scripts || {};
-        const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-        
-        // 1. Check for standard scripts
-        if (scripts.dev) devCommand = 'npm run dev';
-        else if (scripts.serve) devCommand = 'npm run serve';
-        else if (scripts.start) devCommand = 'npm run start';
-        else if (scripts.server) devCommand = 'npm run server';
-        else {
-          // 2. Identify framework from dependencies
-          const detectedFramework = Object.keys(FRAMEWORK_DEFAULTS).find(fw => deps[fw] || deps[`@${fw}/core`]);
-          if (detectedFramework) {
-            devCommand = FRAMEWORK_DEFAULTS[detectedFramework];
-            this.onLog(`[Auto-Detect] Framework found: ${detectedFramework}. Using: ${devCommand}`);
-          } else if (Object.keys(scripts).length > 0) {
-            // 3. Fallback to first script that doesn't look like build/test
-            const possible = Object.keys(scripts).find(s => !['build', 'test', 'lint', 'generate'].includes(s));
-            devCommand = possible ? `npm run ${possible}` : `npm run ${Object.keys(scripts)[0]}`;
-          }
+        const pkgRaw = await this.webcontainerInstance.fs.readFile('/package.json', 'utf8').catch(() => null);
+        if (pkgRaw) {
+          const pkg = JSON.parse(pkgRaw);
+          const scripts = pkg.scripts || {};
+          // 1. Check for standard scripts
+          if (scripts.dev) devCommand = 'npm run dev';
+          else if (scripts.serve) devCommand = 'npm run serve';
+          else if (scripts.start) devCommand = 'npm run start';
+          else if (scripts.server) devCommand = 'npm run server';
+        }
+
+        // 2. Fallback to framework default command if no package scripts matched
+        if (!devCommand && this.detectedFramework) {
+            devCommand = this.detectedFramework.defaults.command;
+            this.onLog(`[Auto-Detect] Using framework default command: ${devCommand}`);
         }
       } catch (e) {
-        this.onLog(`[Warning] No package.json found or readable. Falling back to default: ${devCommand}`);
+        this.onLog(`[Warning] Error deciding dev command: ${e.message}`);
       }
     }
+
+    // Default fallback
+    if (!devCommand) devCommand = 'npm run dev';
 
     // Cleanup previous processes if any
     if (this.serverProcess) {
@@ -825,7 +805,14 @@ export default qcmsTagger;
       }
     };
 
-    // Fast tracking common paths
+    // Fast tracking based on framework profile
+    if (this.detectedFramework && this.detectedFramework.defaults.contentPaths) {
+      for (const path of this.detectedFramework.defaults.contentPaths) {
+        try { await readDirRecursive(path, 3); } catch(e){}
+      }
+    }
+    
+    // Common paths fallback
     try { await readDirRecursive('/src/content', 2); } catch(e){}
     try { await readDirRecursive('/src/pages', 3); } catch(e){}
     try { await readDirRecursive('/content', 2); } catch(e){}
