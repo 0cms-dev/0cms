@@ -20,7 +20,6 @@ const ui = {
     repoLoader: document.getElementById('cmsRepoLoader'),
     loginBtn: document.getElementById('cmsLoginBtn'),
     saveBtn: document.getElementById('cmsSaveBtn'),
-    backToLoginBtn: document.getElementById('cmsBackToLogin'),
     navHistory: document.getElementById('navHistory'),
     navNewPage: document.getElementById('navNewPage'),
     navSEO: document.getElementById('navSEO'),
@@ -178,11 +177,6 @@ ui.btnClose.onclick = () => {
 
 ui.loginBtn.onclick = () => window.location.href = '/github/login';
 ui.landingLoginBtn.onclick = () => window.location.href = '/github/login';
-
-ui.backToLoginBtn.onclick = () => {
-    ui.stepPicker.classList.add('hidden');
-    ui.stepLogin.classList.remove('hidden');
-};
 
 ui.navNewPage.onclick = async () => {
     const isVisible = ui.createPanel.style.display === 'flex';
@@ -431,6 +425,8 @@ async function fetchInstallations() {
     // Always clear and ensure some content exists so the dropdown has "volume"
     ui.accountDropdown.innerHTML = '';
     
+    let appSlug = '0cms-dev'; // fallback for app management links
+    
     try {
         const res = await fetch('/github/api/user/installations', {
             headers: { 'Authorization': `Bearer ${settings.token}` }
@@ -450,27 +446,24 @@ async function fetchInstallations() {
         const data = await res.json();
         installations = data.installations || [];
         
-        // NEW: Try to get the App slug to provide a better "Manage" link
-        let appSlug = '0cms-dev'; // fallback
         try {
             const appRes = await fetch('/github/api/app');
             const appData = await appRes.json();
             if (appData.slug) appSlug = appData.slug;
+            
+            // Set the main settings gear fallback URL to the App overview immediately
+            if (ui.ghAppSettingsLink) {
+                ui.ghAppSettingsLink.href = `https://github.com/apps/${appSlug}`;
+            }
         } catch (e) {}
 
         if (installations.length > 0) {
             installations.forEach(inst => {
                 const item = document.createElement('div');
                 item.className = 'dropdown-item';
-                item.style.justifyContent = 'space-between';
                 item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${inst.account.avatar_url}" class="account-avatar">
-                        <span>${inst.account.login}</span>
-                    </div>
-                    <a href="https://github.com/settings/installations/${inst.id}" target="_blank" class="account-settings-btn" title="Settings" onclick="event.stopPropagation()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    </a>
+                    <img src="${inst.account.avatar_url}" class="account-avatar">
+                    <span>${inst.account.login}</span>
                 `;
                 item.onclick = (e) => {
                     e.stopPropagation();
@@ -505,7 +498,7 @@ async function fetchInstallations() {
         `;
         manageItem.onclick = (e) => {
             e.stopPropagation();
-            window.open(`https://github.com/apps/${appSlug}/installations/select_target`, '_blank');
+            window.open(`https://github.com/apps/${appSlug}`, '_blank');
         };
         ui.accountDropdown.appendChild(manageItem);
 
@@ -536,7 +529,8 @@ async function selectInstallation(inst) {
         const res = await fetch(`/github/api/app/installations/${inst.id}/access_tokens`, {
             method: 'POST'
         });
-        const data = await res.json();
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : {};
         
         if (data.token) {
             currentInstallationToken = data.token;
@@ -560,20 +554,26 @@ ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
 async function fetchRepos(installationId = null) {
     if (!settings.token) return;
 
-    ui.repoList.innerHTML = '<div class="loader"></div>';
+    ui.landingRepoList.innerHTML = '<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-muted)"><div class="loader" style="margin: 0 auto;"></div></div>';
     
     try {
         const path = installationId ? `user/installations/${installationId}/repositories` : 'user/repos?sort=updated&per_page=100';
         const res = await fetch(`/github/api/${path}`, {
-            headers: { 'Authorization': `Bearer ${getActiveToken()}` }
+            headers: { 'Authorization': `Bearer ${settings.token}` }
         });
         
-        let data = await res.json();
+        let data;
+        try {
+            data = await res.json();
+        } catch(e) {
+            data = { message: 'Failed to read JSON from API' };
+        }
+        
         currentRepos = Array.isArray(data) ? data : (data.repositories || []);
         
         if (!Array.isArray(currentRepos)) {
             const errorMsg = data.message || 'Failed to fetch repositories.';
-            ui.repoList.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-danger)">${errorMsg}</div>`;
+            ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">${errorMsg}</div>`;
             return;
         }
 
@@ -581,7 +581,7 @@ async function fetchRepos(installationId = null) {
         
     } catch (err) {
         console.error('FetchRepos Error:', err);
-        ui.repoList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-danger)">Connection error.</div>';
+        ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">Connection error: ${err.message}</div>`;
     }
 }
 
