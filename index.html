@@ -360,7 +360,7 @@
         .repo-controls { display: flex; gap: 12px; margin-bottom: 24px; align-items: stretch; position: relative; }
         
         .account-switcher-group {
-            flex: 1; display: flex; align-items: stretch;
+            flex: 1; max-width: 260px; display: flex; align-items: stretch; height: 44px; box-sizing: border-box;
             background: var(--bg); border: 1px solid var(--border);
             border-radius: 12px; transition: 0.2s; min-width: 0;
             position: relative;
@@ -385,13 +385,13 @@
         .account-switcher.active svg.chevron { transform: scale(0.9); opacity: 0.8; }
         
         .search-container {
-            position: relative; display: flex; align-items: center; justify-content: flex-end; transition: 0.3s;
+            position: relative; display: flex; align-items: center; justify-content: flex-end; transition: 0.3s; margin-left: auto;
         }
         .search-icon { 
-            position: absolute; right: 12px; color: var(--text-muted); pointer-events: none; z-index: 1; transition: 0.2s;
+            position: absolute; right: 14px; color: var(--text-muted); pointer-events: none; z-index: 1; transition: 0.2s;
         }
         .search-input {
-            width: 44px; padding: 10px 12px; border-radius: 12px;
+            width: 44px; height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 12px;
             border: 1px solid var(--border); background: var(--bg);
             color: var(--text); font-size: 0.9rem; outline: none; transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             cursor: pointer;
@@ -701,6 +701,11 @@
                 <h2 style="font-size: 1.8rem; margin:0">Your Projects</h2>
                 
                 <div class="repo-controls" style="margin-bottom: 0; min-width: 500px;">
+                    <div class="search-container">
+                        <input type="text" id="repoSearchInput" class="search-input" placeholder="Search...">
+                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+
                     <div class="account-switcher-group">
                         <div class="account-switcher" id="accountSwitcherBtn">
                             <img id="selectedAccountAvatar" src="https://github.com/identicons/null.png" class="account-avatar">
@@ -712,11 +717,6 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                         </a>
                         <div id="accountDropdown" class="account-dropdown"></div>
-                    </div>
-                    
-                    <div class="search-container">
-                        <input type="text" id="repoSearchInput" class="search-input" placeholder="Search...">
-                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
                 </div>
             </div>
