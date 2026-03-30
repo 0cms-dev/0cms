@@ -22,7 +22,7 @@ function loadEnv() {
 }
 loadEnv();
 
-const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'Iv23liNrAlnfsB931xbl';
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'YOUR_CLIENT_ID';
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
 
 const MIME_TYPES = {
