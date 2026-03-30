@@ -1,9 +1,26 @@
-.env
+# Dependencies
 /node_modules
-/.env
 /dist
-.DS_Store
-.webcontainer
 
-# 0CMS Examples
-examples/
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Runtime / Temp
+/.webcontainer
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# System Files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Testing
+/examples/

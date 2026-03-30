@@ -4,9 +4,9 @@
   "description": "Zero-Config In-Browser CMS with WebContainers and isomorphic-git",
   "main": "serve.js",
   "scripts": {
-    "start": "node serve.js",
-    "dev": "node serve.js",
-    "build": "node build.mjs"
+    "start": "bun serve.js",
+    "dev": "bun serve.js",
+    "build": "bun build.mjs"
   },
   "author": "ZeroCMS Team",
   "license": "MIT",
@@ -17,6 +17,5 @@
     "isomorphic-git": "^1.37.4"
   },
   "devDependencies": {
-    "esbuild": "^0.27.4"
   }
 }

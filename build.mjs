@@ -1,41 +1,46 @@
-import esbuild from 'esbuild';
-import fs from 'fs/promises';
-import path from 'path';
+import { rm, mkdir, readdir } from "node:fs/promises";
+import { join } from "node:path";
 
-const DIST = 'dist';
-const ASSETS = path.join(DIST, 'assets');
+const DIST = "dist";
+const ASSETS = join(DIST, "assets");
 
 async function build() {
-  console.log('🚀 Starting ZeroCMS Production Build...');
+  console.log("🚀 Starting ZeroCMS Production Build (via Bun)...");
 
   // 1. Clean and Create Directories
-  await fs.rm(DIST, { recursive: true, force: true });
-  await fs.mkdir(ASSETS, { recursive: true });
-  await fs.mkdir(path.join(DIST, 'lib'), { recursive: true });
+  await rm(DIST, { recursive: true, force: true });
+  await mkdir(ASSETS, { recursive: true });
+  await mkdir(join(DIST, "lib"), { recursive: true });
 
   // 2. Bundle Dashboard App
-  console.log('📦 Bundling app... ');
-  const result = await esbuild.build({
-    entryPoints: ['app.js'],
-    bundle: true,
+  console.log("📦 Bundling app... ");
+  const result = await Bun.build({
+    entrypoints: ["app.js"],
+    outdir: ASSETS,
+    naming: "app.bundle.js",
     minify: true,
-    sourcemap: true,
-    format: 'esm',
-    target: ['es2020'],
-    outfile: path.join(ASSETS, 'app.bundle.js'),
-    external: ['/lib/*'], // Keep libs external if they are loaded via absolute paths
+    sourcemap: "external",
+    target: "browser",
+    external: ["/lib/*"], 
   });
 
+  if (!result.success) {
+    console.error("❌ Bundle failed:", result.logs);
+    process.exit(1);
+  }
+
   // 3. Copy Static Libraries
-  console.log('📂 Copying libraries...');
-  const libs = await fs.readdir('lib');
+  console.log("📂 Copying libraries...");
+  const libs = await readdir("lib");
   for (const lib of libs) {
-    await fs.copyFile(path.join('lib', lib), path.join(DIST, 'lib', lib));
+    const src = join("lib", lib);
+    const dest = join(DIST, "lib", lib);
+    await Bun.write(dest, Bun.file(src));
   }
 
   // 4. Transform index.html for Production
-  console.log('📄 Processing index.html...');
-  let html = await fs.readFile('index.html', 'utf8');
+  console.log("📄 Processing index.html...");
+  let html = await Bun.file("index.html").text();
   
   // Replace the dev script tag with the production bundle
   html = html.replace(
@@ -43,19 +48,16 @@ async function build() {
     '<script type="module" src="./assets/app.bundle.js"></script>'
   );
 
-  await fs.writeFile(path.join(DIST, 'index.html'), html);
+  await Bun.write(join(DIST, "index.html"), html);
 
   // 5. Copy other essential files
-  console.log('📋 Copying configuration files...');
-  await fs.copyFile('_headers', path.join(DIST, '_headers'));
-  
-  // Optional: Copy examples if needed for deployment preview
-  // await fs.cp('examples', path.join(DIST, 'examples'), { recursive: true });
+  console.log("📋 Copying configuration files...");
+  await Bun.write(join(DIST, "_headers"), Bun.file("_headers"));
 
-  console.log('✨ Build complete! Production files are in the /dist directory.');
+  console.log("✨ Build complete! Production files are in the /dist directory.");
 }
 
 build().catch((err) => {
-  console.error('❌ Build failed:', err);
+  console.error("❌ Build failed:", err);
   process.exit(1);
 });

@@ -63,10 +63,12 @@ Supported frameworks include:
 
 ZeroCMS is an open-source project. If you wish to self-host or contribute to the core:
 
-1. **Fork & Clone** the repository.
-2. **Setup** a `.env` file with your own `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a custom GitHub OAuth App.
-3. **Run** `npm install` && `npm start`. The dev environment runs on `localhost:3000`.
-4. **Develop** your feature or fix and submit a PR!
+1. **Install Bun**: [Bun.sh](https://bun.sh/) is required for development and building.
+2. **Fork & Clone** the repository.
+3. **Setup** a `.env` file with your own `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a custom GitHub OAuth App.
+4. **Run** `bun install` && `bun start`. The dev environment runs on `localhost:3000`.
+5. **Build** for production via `bun run build`. The output will be in the `/dist` directory.
+6. **Develop** your feature or fix and submit a PR!
 
 Please ensure your code follows the existing minimalist aesthetic and uses vanilla JS/CSS where possible.
 
