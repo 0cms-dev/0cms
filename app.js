@@ -446,7 +446,7 @@ async function fetchInstallations() {
             
             // Set the main settings gear fallback URL to the App overview immediately
             if (ui.ghAppSettingsLink) {
-                ui.ghAppSettingsLink.href = `https://github.com/apps/${appSlug}`;
+                ui.ghAppSettingsLink.href = `https://github.com/apps/${appSlug}/installations/new`;
             }
         } catch (e) {}
 
@@ -491,7 +491,7 @@ async function fetchInstallations() {
         `;
         manageItem.onclick = (e) => {
             e.stopPropagation();
-            window.open(`https://github.com/apps/${appSlug}`, '_blank');
+            window.open(`https://github.com/apps/${appSlug}/installations/new`, '_blank');
         };
         ui.accountDropdown.appendChild(manageItem);
 
