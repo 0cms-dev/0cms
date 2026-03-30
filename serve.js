@@ -206,27 +206,49 @@ const server = http.createServer((req, res) => {
     delete options.headers['origin'];
     delete options.headers['referer'];
     
+    if (options.headers['connection'] === 'keep-alive') {
+        delete options.headers['connection'];
+    }
+
     const proxyReq = https.request(gitUrl, options, (proxyRes) => {
-      // IMPORTANT: Transform 401 → 400 to prevent the browser from showing
-      // its native "Sign in to localhost" Basic Auth dialog.
-      // isomorphic-git's onAuth/onAuthFailure handles authentication itself.
-      const statusCode = proxyRes.statusCode === 401 ? 400 : proxyRes.statusCode;
+      const isPush = req.url.includes('git-receive-pack');
+      
+      // For FETCH (upload-pack): convert 401→400 to prevent browser Basic Auth dialog.
+      // For PUSH (receive-pack): keep real 401 so isomorphic-git onAuthFailure triggers,
+      //   but STRIP the WWW-Authenticate header so the BROWSER doesn't show its own dialog.
+      const statusCode = (!isPush && proxyRes.statusCode === 401) ? 400 : proxyRes.statusCode;
+      
+      const responseHeaders = { ...proxyRes.headers };
+      // Always strip WWW-Authenticate - we handle auth ourselves, browser dialog is never helpful
+      delete responseHeaders['www-authenticate'];
+      
+      console.log(`[Git Proxy] ${req.method} ${gitUrl} -> ${proxyRes.statusCode} (proxied as ${statusCode})`);
+      
       res.writeHead(statusCode, {
-        ...proxyRes.headers,
-        'Access-Control-Allow-Origin': '*'
+        ...responseHeaders,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'x-git-protocol, content-type, content-length'
       });
+      
       proxyRes.pipe(res);
     });
     
     proxyReq.on('error', (e) => {
+      console.error(`[Git Proxy Error] ${e.message}`);
       res.writeHead(500);
       res.end('Git Proxy Error: ' + e.message);
     });
-    req.pipe(proxyReq);
+
+    if (req.method === 'POST') {
+      req.pipe(proxyReq);
+    } else {
+      proxyReq.end();
+    }
     return;
   }
 
   let filePath = '.' + req.url.split('?')[0];
+
   // Map root to the main index.html (One-Pager)
   if (filePath === './') {
     filePath = './index.html';

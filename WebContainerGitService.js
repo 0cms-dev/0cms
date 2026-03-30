@@ -31,6 +31,9 @@ export class WebContainerGitService {
     this.isDevMode = false;
     this.serverProcess = null;
     this.middlewareProc = null;
+    
+    // Track files actually modified by applySmartMatchChange so we know what to sync
+    this._modifiedFiles = new Set();
   }
 
   /**
@@ -94,7 +97,7 @@ export class WebContainerGitService {
           dir: this.dir,
           url: this.repoUrl,
           corsProxy: this.proxy,
-          onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+          onAuth: () => ({ username: 'x-access-token', password: this.token }),
           onAuthFailure: () => { throw new Error('GitHub authentication failed. Please check your token.'); },
           singleBranch: true,
           fastForwardOnly: true,
@@ -305,6 +308,31 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       }
       
       // Astro doesn't need an injection, it has data-astro-source-file in dev
+      
+      // Check for Vite (common in Vue/React/Svelte)
+      if (deps['vite']) {
+        this.onLog('[Tagger] Vite detected. Injecting vite.config.js wrapper...');
+        const vitePlugin = `
+const qcmsTagger = () => ({
+  name: 'qcms-tagger',
+  transform(code, id) {
+    if (id.endsWith('.jsx') || id.endsWith('.tsx') || id.endsWith('.vue') || id.endsWith('.svelte')) {
+      const relativeId = id.replace(process.cwd(), '');
+      // Simple regex to inject data-cms-source into the first tag of a component
+      // This is a heuristic - in production we'd use a proper parser
+      if (code.includes('<') && !code.includes('data-cms-source')) {
+        return code.replace(/<([a-zA-Z0-9]+)/, '<$1 data-cms-source="' + relativeId + '"');
+      }
+    }
+    return null;
+  }
+});
+export default qcmsTagger;
+`;
+        await this.webcontainerInstance.fs.writeFile('qcms-vite-plugin.js', vitePlugin);
+        // Note: For a real zero-config, we'd need to dynamically wrap the existing vite.config.js
+        // but for now we'll just log and let the user know, or try to append if it's simple.
+      }
     } catch (e) {
       this.onLog(`[Warning] Tagger injection failed: ${e.message}`);
     }
@@ -465,12 +493,37 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
 
   /**
    * Commits all changes made in the WebContainer back to Git.
+   * Only syncs files that were actually modified by applySmartMatchChange.
    */
   async publishChanges(commitMessage = 'CMS update') {
     this.onStatusChange('Syncing changes back...');
     
-    // 1. Sync files back from WebContainer to lightning-fs (Cleanup CMS files!)
-    await this.syncFromWebContainer();
+    if (this._modifiedFiles.size === 0) {
+      this.onLog('[Publish] No files were modified via SmartMatch. Nothing to commit.');
+      this.onStatusChange('No changes to publish.');
+      setTimeout(() => this.onStatusChange('Idle'), 3000);
+      return { success: true, message: 'No changes' };
+    }
+
+    this.onLog(`[Publish] Syncing ${this._modifiedFiles.size} modified file(s) to Git FS...`);
+    
+    // Only sync the files we actually changed (faster + more reliable)
+    for (const filePath of this._modifiedFiles) {
+      try {
+        const content = await this.webcontainerInstance.fs.readFile(filePath);
+        // Ensure parent directories exist in LightningFS
+        const parts = filePath.split('/').filter(Boolean);
+        let currentPath = this.dir;
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath += '/' + parts[i];
+          await this.fs.mkdir(currentPath).catch(() => {});
+        }
+        await this.fs.writeFile(this.dir + filePath, content);
+        this.onLog(` ✓ Synced: ${filePath}`);
+      } catch (e) {
+        this.onLog(` ✗ Failed to sync ${filePath}: ${e.message}`);
+      }
+    }
 
     // 2. Explicitly remove any CMS-internal files from the Git index if they exist
     const gitFiles = await git.listFiles({ fs: this.fs, dir: this.dir });
@@ -480,9 +533,25 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
       }
     }
 
-    // 3. Git Commit & Push
+    // 3. Check status and add changed files
     this.onStatusChange('Committing...');
-    await git.add({ fs: this.fs, dir: this.dir, filepath: '.' });
+    const status = await git.statusMatrix({ fs: this.fs, dir: this.dir, filepath: '.' });
+    const changedFiles = status.filter(row => row[1] !== row[2]);
+    
+    if (changedFiles.length === 0) {
+      this.onLog('[Publish] Git sees no diff after targeted sync. Files may already be at latest.');
+      this._modifiedFiles.clear();
+      this.onStatusChange('No changes to publish.');
+      setTimeout(() => this.onStatusChange('Idle'), 3000);
+      return { success: true, message: 'No changes' };
+    }
+
+    this.onLog(`[Publish] Git detected ${changedFiles.length} changed file(s). Staging...`);
+    for (const [file] of changedFiles) {
+      this.onLog(` + ${file}`);
+      await git.add({ fs: this.fs, dir: this.dir, filepath: file });
+    }
+
     await git.commit({
       fs: this.fs,
       dir: this.dir,
@@ -491,17 +560,29 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     });
 
     this.onStatusChange('Pushing to GitHub...');
+    this.onLog(`[Push] Starting push to ${this.repoUrl} (Branch: ${await git.currentBranch({ fs: this.fs, dir: this.dir })})`);
+    
     const pushResult = await git.push({
       fs: this.fs,
       http: (await import('/lib/isomorphic-git-http.js')).default,
       dir: this.dir,
       url: this.repoUrl,
-      onAuth: () => ({ username: 'x-token-auth', password: this.token }),
-      onAuthFailure: () => { throw new Error('GitHub authentication failed. Check that your token has the "repo" scope.'); },
+      onAuth: () => ({ username: 'x-access-token', password: this.token }),
+      onAuthFailure: () => { 
+          this.onLog('[Push] Authentication failed! Check that your GitHub token has the "repo" scope.');
+          throw new Error('GitHub authentication failed. Token may be expired or lacks "repo" scope.'); 
+      },
       corsProxy: this.proxy
     });
 
-    this.onStatusChange('Publish successful!');
+    if (pushResult.ok) {
+        this.onLog('[Push] Push successful!');
+        this.onStatusChange('Published successfully!');
+        this._modifiedFiles.clear(); // Reset tracking after successful push
+    } else {
+        this.onLog(`[Push] Push rejected: ${JSON.stringify(pushResult.refs)}`);
+        throw new Error('Push rejected by GitHub.');
+    }
     return pushResult;
   }
 
@@ -529,51 +610,150 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
 
   /**
    * Scans the filesystem for 'original' and replaces it with 'updated'.
-   * If sourceFile is provided (via Tagger plugin), it targets that file directly.
+   * Tracks every file it writes to in this._modifiedFiles.
+   * Uses partial/word matching for template-composed strings.
    */
   async applySmartMatchChange(original, updated, sourceFile = null) {
-    if (!original || original === updated) return;
+    if (!original || original === updated) return false;
     
+    const writeAndTrack = async (filePath, content) => {
+      await this.webcontainerInstance.fs.writeFile(filePath, content);
+      const absPath = filePath.startsWith('/') ? filePath : '/' + filePath;
+      // Don't track auto-generated SSG cache files - they're in .gitignore anyway
+      const isGenerated = absPath.includes('db.json') || absPath.includes('/.cache/') || absPath.includes('/.astro/') || absPath.includes('/public/');
+      if (!isGenerated) {
+        this._modifiedFiles.add(absPath);
+        this.onLog(`[SmartMatch] ✓ Wrote changes to ${filePath}`);
+      } else {
+        this.onLog(`[SmartMatch] Skipped generated file: ${filePath}`);
+      }
+    };
+
+    // --- Helper: find the best string match (exact or partial) ---
+    const findMatch = (content, searchStr) => {
+      if (content.includes(searchStr)) return searchStr;
+      // Try trimmed version
+      const trimmed = searchStr.trim();
+      if (trimmed !== searchStr && content.includes(trimmed)) return trimmed;
+      // Try matching the first significant word/segment (for template-composed titles like "Home - Site Name")
+      const segments = searchStr.split(/\s*[-|·–—]\s*/);
+      for (const seg of segments) {
+        const s = seg.trim();
+        if (s.length > 3 && content.includes(s)) return s;
+      }
+      return null;
+    };
+
     // 1. If we have a dedicated source file, try to update it directly first
     if (sourceFile) {
-      this.onLog(`[SmartMatch] Direct source mapping found: ${sourceFile}`);
+      this.onLog(`[SmartMatch] Trying direct source: ${sourceFile}`);
       try {
         let content = await this.webcontainerInstance.fs.readFile(sourceFile, 'utf8');
-        if (content.includes(original)) {
-          this.onLog(`[SmartMatch] Success: Found match in ${sourceFile}`);
-          content = content.split(original).join(updated);
-          await this.webcontainerInstance.fs.writeFile(sourceFile, content);
+        
+        // DATA OBJECT UPDATE: JSON
+        if (sourceFile.endsWith('.json')) {
+            try {
+                const data = JSON.parse(content);
+                const updateValue = (obj) => {
+                    let updatedCount = 0;
+                    for (const key in obj) {
+                        if (typeof obj[key] === 'string') {
+                            const match = findMatch(obj[key], original);
+                            if (match !== null && obj[key] === original) {
+                                obj[key] = updated;
+                                updatedCount++;
+                            }
+                        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                            updatedCount += updateValue(obj[key]);
+                        }
+                    }
+                    return updatedCount;
+                };
+                if (updateValue(data) > 0) {
+                    await writeAndTrack(sourceFile, JSON.stringify(data, null, 2));
+                    return true;
+                }
+            } catch (e) {
+                this.onLog(`[Warning] Failed to parse JSON ${sourceFile}: ${e.message}`);
+            }
+        }
+
+        // DATA OBJECT UPDATE: YAML
+        if (sourceFile.endsWith('.yml') || sourceFile.endsWith('.yaml')) {
+            const matchStr = findMatch(content, original);
+            if (matchStr) {
+                const escaped = matchStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`^(\\s*[a-zA-Z0-9_-]+\\s*:\\s*["']?)${escaped}["']?\\s*$`, 'm');
+                if (regex.test(content)) {
+                    this.onLog(`[SmartMatch] YAML key match in ${sourceFile}`);
+                    // Replace only the matched segment within the line 
+                    content = content.replace(regex, (m, prefix) => `${prefix}${updated}`);
+                    await writeAndTrack(sourceFile, content);
+                    return true;
+                }
+                // Fallback: direct replacement of matched segment in file
+                content = content.split(matchStr).join(updated);
+                await writeAndTrack(sourceFile, content);
+                return true;
+            }
+        }
+
+        // FALLBACK: Raw string or partial match in mapped file
+        const matchStr = findMatch(content, original);
+        if (matchStr) {
+          content = content.split(matchStr).join(updated);
+          await writeAndTrack(sourceFile, content);
           return true;
         }
       } catch (e) {
-        this.onLog(`[Warning] Could not read mapped source file ${sourceFile}: ${e.message}`);
+        this.onLog(`[Warning] Could not read source file ${sourceFile}: ${e.message}`);
       }
     }
 
-    this.onLog(`[SmartMatch] Falling back to global search for: "${original.substring(0, 30)}..."`);
-    const searchDirs = ['/source', '/src', '/layouts', '/'];
+    // 2. Global file search - check source directories first, then root
+    this.onLog(`[SmartMatch] Global search for: "${original.substring(0, 40)}"`);
+    const searchDirs = ['/source', '/src', '/content', '/layouts', '/themes', '/'];
     
     const findAndReplace = async (dir) => {
-      let entries = [];
-      try { entries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true }); }
+      let dirEntries = [];
+      try { dirEntries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true }); }
       catch (e) { return false; }
 
-      for (const entry of entries) {
+      for (const entry of dirEntries) {
         const fullPath = dir === '/' ? `/${entry.name}` : `${dir}/${entry.name}`;
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('zcms-')) continue;
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('zcms-') || entry.name === 'public' || entry.name === 'dist' || entry.name === '.astro') continue;
 
         if (entry.isDirectory()) {
           if (await findAndReplace(fullPath)) return true;
         } else {
-          // Only check text-like files
-          const exts = ['.md', '.html', '.ejs', '.astro', '.vue', '.json', '.yml', '.yaml'];
+          const exts = ['.md', '.mdx', '.html', '.ejs', '.hbs', '.njk', '.astro', '.vue', '.json', '.yml', '.yaml', '.js', '.ts', '.jsx', '.tsx', '.toml'];
           if (exts.some(ext => entry.name.endsWith(ext))) {
             try {
               let content = await this.webcontainerInstance.fs.readFile(fullPath, 'utf8');
-              if (content.includes(original)) {
-                this.onLog(`[SmartMatch] Match found in ${fullPath}! Applying change...`);
-                content = content.split(original).join(updated);
-                await this.webcontainerInstance.fs.writeFile(fullPath, content);
+              const matchStr = findMatch(content, original);
+              if (matchStr !== null) {
+                if (fullPath.endsWith('.json')) {
+                    try {
+                        const data = JSON.parse(content);
+                        const updateValue = (obj) => {
+                            let count = 0;
+                            for (const key in obj) {
+                                if (typeof obj[key] === 'string' && obj[key] === original) {
+                                    obj[key] = updated; count++;
+                                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                                    count += updateValue(obj[key]);
+                                }
+                            }
+                            return count;
+                        };
+                        if (updateValue(data) > 0) {
+                            await writeAndTrack(fullPath, JSON.stringify(data, null, 2));
+                            return true;
+                        }
+                    } catch (e) {}
+                }
+                content = content.split(matchStr).join(updated);
+                await writeAndTrack(fullPath, content);
                 return true;
               }
             } catch (e) {}
@@ -584,10 +764,11 @@ hexo.extend.filter.register('after_render:html', function(html, data) {
     };
 
     for (const s of searchDirs) {
-      if (await findAndReplace(s)) return;
+      if (await findAndReplace(s)) return true;
     }
     
-    this.onLog(`[Warning] SmartMatch failed to find original text in any source files.`);
+    this.onLog(`[Warning] SmartMatch could not find "${original.substring(0, 40)}" in any source file.`);
+    return false;
   }
 
   /**

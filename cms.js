@@ -35,7 +35,11 @@ class ZeroConfigCMS {
         }
         if (e.data.type === 'CMS_PURGE') {
           this.changes = {};
+          this.historyStack = [];
+          this.redoStack = [];
           localStorage.removeItem(this.storageKey);
+          localStorage.removeItem(`${this.storageKey}-history`);
+          this._performNotify(); // Update the parent UI
           // Silent - no reload, let SSG HMR handle it
         }
         if (e.data.type === 'CMS_REVERT' && e.data.selector) {

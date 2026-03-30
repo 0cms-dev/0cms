@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>0cms Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%237c3aed'/><text y='.9em' font-size='80' x='10'>0</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
@@ -861,17 +862,21 @@
         
         // Unconditionally refresh UI state on load to ensure persistence
         refreshLandingUI();
+        
+        // Auto-reopen dashboard if it was open before.
+        // We reuse the pre-warming service to avoid a double boot.
+        if (localStorage.getItem('zcms-dashboard-open') === 'true' && settings.repo && settings.token) {
+            // Wait a tick so the pre-warm has registered, then click
+            setTimeout(() => ui.btnToggle.click(), 100);
+        }
 
         // 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo
         const preWarmingService = new WebContainerGitService();
         if (settings.repo && settings.token) {
-            console.log('[Quantum] Starting background pre-warm for:', settings.repo);
+            preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
+            preWarmingService.token = settings.token;
             preWarmPromise = preWarmingService.initWebContainer()
-                .then(() => {
-                    preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
-                    preWarmingService.token = settings.token;
-                    return preWarmingService.boot(localStorage.getItem('zcms-manual-command'));
-                })
+                .then(() => preWarmingService.boot(localStorage.getItem('zcms-manual-command')))
                 .catch(e => console.error('Pre-warm failed:', e));
         } else {
             preWarmPromise = preWarmingService.initWebContainer();
@@ -880,6 +885,7 @@
         // 2. DASHBOARD UI CONTROLS
         ui.btnToggle.onclick = () => {
             ui.dashboard.style.display = 'flex';
+            localStorage.setItem('zcms-dashboard-open', 'true');
             if (settings.repo && settings.token) {
                 ui.stepLogin.classList.add('hidden');
                 ui.stepPicker.classList.add('hidden');
@@ -895,6 +901,7 @@
 
         ui.btnClose.onclick = () => {
             ui.dashboard.classList.add('closing');
+            localStorage.removeItem('zcms-dashboard-open');
             setTimeout(() => {
                 ui.dashboard.style.display = 'none';
                 ui.dashboard.classList.remove('closing');
@@ -1239,6 +1246,23 @@
 
                 ui.counter.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} saved`;
                 ui.counter.style.display = 'inline';
+
+                // REAL-TIME SYNC: Apply the last change to the WebContainer FS
+                if (entries.length > 0 && cmsService) {
+                    const lastEntry = entries[entries.length - 1];
+                    if (lastEntry.original && lastEntry.updated && lastEntry.original !== lastEntry.updated) {
+                         // Non-blocking sync to avoid freezing the UI
+                         cmsService.applySmartMatchChange(
+                            lastEntry.original, 
+                            lastEntry.updated, 
+                            lastEntry.sourceFile || null
+                         ).then(ok => {
+                             if (ok) console.log(`[CMS] Autosynced: ${lastEntry.selector}`);
+                         }).catch(err => {
+                             console.error('[CMS] Autosync failed:', err);
+                         });
+                    }
+                }
                 
                 // Toggle Undo/Redo button states
                 if (e.data.canUndo) ui.navBack.classList.remove('disabled');
@@ -1282,6 +1306,7 @@
                     }
                 }
             }
+
         };
 
         window.undoChange = (selector) => {
@@ -1332,41 +1357,36 @@
              const oldHTML = ui.saveBtn.innerHTML;
              ui.saveBtn.innerHTML = 'Publishing...';
              try {
-                // STEP 1: Apply all visual changes to source files in WebContainer
-                if (entries && entries.length > 0) {
-                    showToast(`Applying ${entries.length} change(s) to source...`, 'info');
-                    let applied = 0;
-                    for (const entry of entries) {
-                        if (entry.original !== undefined && entry.updated !== undefined && entry.original !== entry.updated) {
-                            try {
-                                const ok = await cmsService.applySmartMatchChange(
-                                    entry.original,
-                                    entry.updated,
-                                    entry.sourceFile || null
-                                );
-                                if (ok) applied++;
-                            } catch (matchErr) {
-                                console.warn('[CMS] SmartMatch failed for:', entry.selector, matchErr.message);
-                            }
-                        }
-                    }
-                    console.log(`[CMS] Applied ${applied}/${entries.length} changes to source files.`);
-                }
-
-                // STEP 2: Commit & Push
+                // STEP 1: Sync & Commit & Push (Source is updated in real-time now)
                 showToast('Syncing to GitHub...', 'info');
-                await cmsService.publishChanges('Visual update via ZeroCMS');
+                const result = await cmsService.publishChanges(`Visual update: ${new Date().toLocaleString()}`);
 
-                // STEP 3: Clear local draft
-                ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
-                showToast('Changes published successfully!', 'success');
+                if (result && result.message === 'No changes') {
+                    showToast('No changes detected since last publish.', 'info');
+                } else {
+                    // STEP 2: Clear local draft in the editor
+                    ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
+                    
+                    // Reset parents own variables for instant UI update
+                    changes = {};
+                    entries = [];
+                    ui.saveBtn.style.display = 'none';
+                    ui.statusLabel.textContent = '0 Unsaved Changes';
+                    ui.statusLabel.style.color = 'var(--text-muted)';
+                    ui.counter.textContent = 'Changes published';
+                    
+                    showToast('Changes published successfully!', 'success');
+                }
              } catch (e) { 
-                 showToast(e.message, 'error'); 
+                 console.error('[CMS] Publish failed:', e);
+                 alert(`Publish failed: ${e.message}`); // Use alert for prominence on error
+                 showToast(`Publish failed: ${e.message}`, 'error'); 
              } finally {
                  ui.saveBtn.disabled = false;
                  ui.saveBtn.innerHTML = oldHTML;
              }
         };
+
 
     </script>
 </body>

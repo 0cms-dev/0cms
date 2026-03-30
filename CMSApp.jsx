@@ -45,14 +45,22 @@ export default function CMSAdminDashboard() {
     if (msg) {
       setStatus('Publishing...');
       try {
-        await cmsRef.current.publishChanges(msg);
-        setStatus('Published');
+        const result = await cmsRef.current.publishChanges(msg);
+        if (result && result.message === 'No changes') {
+          setStatus('Nothing to publish');
+        } else {
+          setStatus('Published!');
+          alert('Successfully published changes to GitHub!');
+        }
         setTimeout(() => setStatus('Idle'), 3000);
       } catch (err) {
-        setStatus(`Error: ${err.message}`);
+        console.error('Publish failed:', err);
+        setStatus('Error');
+        alert(`Publish failed: ${err.message}\nCheck your GitHub token and repository permissions.`);
       }
     }
   };
+
 
   // Keyboard shortcut for Command Palette placeholder
   useEffect(() => {
@@ -65,6 +73,35 @@ export default function CMSAdminDashboard() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Sync changes from the preview iframe to the WebContainer filesystem
+  useEffect(() => {
+    const handleMessage = async (event) => {
+      // Check if the message is from our bridge
+      if (event.data.type === 'CMS_CHANGED' && cmsRef.current) {
+        const { entries } = event.data;
+        if (entries && entries.length > 0) {
+          // Process entries that have actual content changes
+          for (const entry of entries) {
+            if (entry.original && entry.updated && entry.original !== entry.updated) {
+              // Only trigger sync if values changed
+              setStatus('Syncing...');
+              try {
+                await cmsRef.current.applySmartMatchChange(entry.original, entry.updated, entry.sourceFile);
+                setStatus('Idle');
+              } catch (err) {
+                console.error('[CMS Bridge] Sync failed:', err);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [cmsRef.current]);
+
 
   return (
     <>
