@@ -63,6 +63,10 @@ export class WebContainerGitService {
     }
 
     this.repoUrl = requestedRepoUrl;
+    if (!this.repoUrl) {
+        this.onLog('[Service] No repository URL provided. Skipping boot initialization.');
+        return;
+    }
     this.isBooting = true;
     try {
       this.onStatusChange('Initializing FileSystem...');

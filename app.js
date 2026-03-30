@@ -114,7 +114,7 @@ if (settings.repo && settings.token) {
     preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
     preWarmingService.token = settings.token;
     preWarmPromise = preWarmingService.initWebContainer()
-        .then(() => preWarmingService.boot(localStorage.getItem('zcms-manual-command')))
+        .then(() => preWarmingService.boot(preWarmingService.repoUrl, localStorage.getItem('zcms-manual-command')))
         .catch(e => console.error('Pre-warm failed:', e));
 } else {
     preWarmPromise = preWarmingService.initWebContainer();
@@ -433,7 +433,7 @@ async function fetchRepos() {
             const item = document.createElement('div');
             item.className = 'repo-item';
             item.onclick = () => selectRepo(repo.full_name);
-            item.innerHTML = `<div><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
+            item.innerHTML = `<div style="padding-left: 0;"><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
             ui.repoList.appendChild(item);
 
             // Skip the active repo in the "all projects" list to avoid duplication
@@ -444,11 +444,8 @@ async function fetchRepos() {
             card.className = 'project-card';
             card.onclick = () => selectRepo(repo.full_name);
             card.innerHTML = `
-                <div class="project-icon" style="width:32px; height:32px; background:var(--bg-tertiary); color:var(--primary); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.9rem;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18M9 21V9"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                </div>
-                <div style="flex:1">
-                    <div class="project-name">${repo.name}</div>
+                <div style="flex:1; padding-left: 0; transition: 0.3s; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <div class="project-name" style="margin-bottom: 4px;">${repo.name}</div>
                     <div class="project-meta">Updated ${new Date(repo.updated_at).toLocaleDateString()}</div>
                 </div>
             `;
