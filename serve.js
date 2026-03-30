@@ -136,7 +136,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(proxyRes.statusCode, {
         'Content-Type': proxyRes.headers['content-type'],
         'Cross-Origin-Resource-Policy': 'cross-origin',
-        'Cache-Control': 'public, max-age=3600'
+        'Cache-Control': 'public, max-age=0, s-maxage=10'
       });
       proxyRes.pipe(res);
     });
