@@ -11,10 +11,19 @@ function loadEnv() {
     const envPath = path.resolve(__dirname, '.env');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      content.split('\n').forEach(line => {
-        const [key, value] = line.split('=');
-        if (key && value) process.env[key.trim()] = value.trim();
-      });
+      const lines = content.split(/\r?\n/);
+      for (let line of lines) {
+        line = line.trim();
+        if (!line || line.startsWith('#')) continue;
+        const index = line.indexOf('=');
+        if (index === -1) continue;
+        const key = line.slice(0, index).trim();
+        let value = line.slice(index + 1).trim();
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1).replace(/\\n/g, '\n');
+        }
+        process.env[key] = value;
+      }
     }
   } catch (e) {
     console.error('Error loading .env file:', e);
@@ -24,6 +33,31 @@ loadEnv();
 
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'YOUR_CLIENT_ID';
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const APP_ID = process.env.GITHUB_APP_ID;
+const PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY;
+
+const crypto = require('crypto');
+
+function base64Url(str) {
+  return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function generateAppJWT() {
+  if (!APP_ID || !PRIVATE_KEY) return null;
+  const header = JSON.stringify({ alg: 'RS256', typ: 'JWT' });
+  const now = Math.floor(Date.now() / 1000);
+  const payload = JSON.stringify({
+    iat: now - 60,
+    exp: now + (10 * 60),
+    iss: APP_ID
+  });
+  
+  const unsignedToken = `${base64Url(header)}.${base64Url(payload)}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsignedToken);
+  const signature = signer.sign(PRIVATE_KEY, 'base64');
+  return `${unsignedToken}.${signature.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')}`;
+}
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -152,12 +186,20 @@ const server = http.createServer((req, res) => {
   // GitHub API Proxy (COEP/CORS Bypass)
   if (req.url.startsWith('/github/api/')) {
     const apiPath = req.url.replace('/github/api/', '');
+    
+    // Special handling for App-Level tokens
+    let authHeader = req.headers['authorization'];
+    if (apiPath.includes('/access_tokens') && APP_ID && PRIVATE_KEY) {
+       console.log('[CMS] Generating App JWT for installation token exchange');
+       authHeader = `Bearer ${generateAppJWT()}`;
+    }
+
     const options = {
       hostname: 'api.github.com',
       port: 443,
       path: '/' + apiPath,
       method: req.method,
-      headers: { ...req.headers }
+      headers: { ...req.headers, 'Authorization': authHeader }
     };
 
     // Keep only essential headers

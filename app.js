@@ -49,6 +49,15 @@ const ui = {
     viewDesktop: document.getElementById('viewDesktop'),
     viewTablet: document.getElementById('viewTablet'),
     viewMobile: document.getElementById('viewMobile'),
+    
+    // NEW REPO PICKER CONTROLS
+    accountSwitcherBtn: document.getElementById('accountSwitcherBtn'),
+    selectedAccountAvatar: document.getElementById('selectedAccountAvatar'),
+    selectedAccountName: document.getElementById('selectedAccountName'),
+    accountDropdown: document.getElementById('accountDropdown'),
+    repoSearchInput: document.getElementById('repoSearchInput'),
+    ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
+    navRepos: document.getElementById('navRepos'),
 };
 
 let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
@@ -73,30 +82,32 @@ let cmsService = null;
 let preWarmPromise = null;
 let changes = {};
 let entries = [];
+let currentRepos = [];
+let installations = [];
+let selectedInstallationId = null;
 
-// 0. UI REFRESH: Project Awareness
-function refreshLandingUI() {
-    if (settings.token) {
-        // User is connected! UI should reflect this "forever"
-        ui.landingLoginBtn.classList.add('hidden');
-        ui.landingRepoSection.classList.remove('hidden');
-        
-        if (settings.repo) {
-            ui.landingProject.classList.remove('hidden');
-            ui.landingRepoName.textContent = settings.repo;
-            // Pre-fetch all repos to populate the list too
-            fetchRepos();
-        } else {
-            ui.landingProject.classList.add('hidden');
-            fetchRepos(); // Just show global list
-        }
-    } else {
-        // Fresh start - show connect action
-        ui.landingLoginBtn.classList.remove('hidden');
-        ui.landingProject.classList.add('hidden');
-        ui.landingRepoSection.classList.add('hidden');
-    }
+
+// --- EVENT LISTENERS (CRITICAL FIRST) ---
+if (ui.accountSwitcherBtn) {
+    ui.accountSwitcherBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = ui.accountDropdown.classList.contains('open');
+        ui.accountDropdown.classList.toggle('open', !isOpen);
+        ui.accountSwitcherBtn.classList.toggle('active', !isOpen);
+        console.log('[CMS] Toggle Dropdown:', !isOpen);
+    };
 }
+
+if (ui.repoSearchInput) {
+    ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
+}
+
+document.addEventListener('click', (e) => {
+    if (ui.accountDropdown && ui.accountSwitcherBtn && !ui.accountSwitcherBtn.contains(e.target)) {
+        ui.accountDropdown.classList.remove('open');
+        ui.accountSwitcherBtn.classList.remove('active');
+    }
+});
 
 // Unconditionally refresh UI state on load to ensure persistence
 refreshLandingUI();
@@ -136,6 +147,12 @@ ui.btnToggle.onclick = () => {
 };
 
 ui.btnToggleLanding.onclick = () => ui.btnToggle.click();
+
+ui.navRepos.onclick = () => {
+    ui.stepPicker.classList.remove('hidden');
+    ui.previewLoader.classList.add('hidden'); // Hide loader if we're picking repos
+    fetchRepos(); // Refresh repo list if we're switching
+};
 
 ui.btnClose.onclick = () => {
     const hasChanges = Object.keys(changes).length > 0;
@@ -361,100 +378,234 @@ async function startCmsEngine(repo, token) {
     }
 }
 
-async function fetchRepos() {
-    ui.repoLoader.classList.remove('hidden');
-    ui.repoList.innerHTML = '';
-    ui.landingRepoList.innerHTML = '';
-    try {
-        let apiUrl = '/github/api/user/repos?sort=updated&per_page=100&visibility=all';
-        if (settings.installation_id) {
-            apiUrl = `/github/api/user/installations/${settings.installation_id}/repositories`;
-        }
-
-        const res = await fetch(apiUrl, {
-            headers: { 
-                Authorization: `token ${settings.token}`,
-                Accept: 'application/vnd.github.v3+json'
-            }
-        });
-        let data = await res.json();
-        let repos = Array.isArray(data) ? data : (data.repositories || []);
-        
-        if (!Array.isArray(repos)) {
-            const errorMsg = data.message || 'Failed to fetch repositories. Please check your GitHub connection.';
-            showToast(errorMsg, 'error');
-            if (res.status === 401) {
-                setTimeout(() => {
-                   settings.token = null;
-                   localStorage.setItem('zcms-settings', JSON.stringify(settings));
-                   ui.stepPicker.classList.add('hidden');
-                   ui.stepLogin.classList.remove('hidden');
-                }, 2000);
-            }
-            return;
-        }
-
-        if (repos.length === 0) {
-            ui.repoList.innerHTML = `
-                <div style="padding:20px; text-align:center; color:var(--text-muted)">
-                    No repositories found.<br>
-                    <a href="https://github.com/apps/0cms-dev/installations/new" style="color:var(--primary); text-decoration:none; margin-top:10px; display:inline-block;">Link repositories →</a>
-                </div>`;
-            return;
-        }
-
-        // If we have repositories, make sure the landing section is visible
+// 0. UI REFRESH: Project Awareness
+async function refreshLandingUI() {
+    if (settings.token) {
+        // User is connected! UI should reflect this "forever"
+        ui.landingLoginBtn.classList.add('hidden');
         ui.landingRepoSection.classList.remove('hidden');
+        
+        // Fetch all account installations in background
+        await fetchInstallations();
 
-        // Auto-select if only one repo and we just came from an install
-        if (repos.length === 1 && settings.installation_id) {
-            // Just save the repo, don't open the dashboard
-            settings.repo = repos[0].full_name;
-            settings.installation_id = null;
-            localStorage.setItem('zcms-settings', JSON.stringify(settings));
-            ui.stepPicker.classList.add('hidden');
+        if (settings.repo) {
             ui.landingProject.classList.remove('hidden');
             ui.landingRepoName.textContent = settings.repo;
-            // Don't return - still populate the repo list below
+        } else {
+            ui.landingProject.classList.add('hidden');
         }
+    } else {
+        // Fresh start - show connect action
+        ui.landingLoginBtn.classList.remove('remove');
+        ui.landingLoginBtn.classList.remove('hidden');
+        ui.landingProject.classList.add('hidden');
+        ui.landingRepoSection.classList.add('hidden');
+    }
+}
 
-        // If no active repo is set, auto-select the most recently updated one
-        if (!settings.repo && repos.length > 0) {
-            settings.repo = repos[0].full_name;
-            localStorage.setItem('zcms-settings', JSON.stringify(settings));
-            ui.stepPicker.classList.add('hidden');
-            ui.landingProject.classList.remove('hidden');
-            ui.landingRepoName.textContent = settings.repo;
-            // Don't start the engine automatically - wait for user to click "Open Dashboard"
-        }
+// --- REPOSITORY PICKER LOGIC ---
 
-        repos.forEach(repo => {
-            // Update Dashboard list...
-            const item = document.createElement('div');
-            item.className = 'repo-item';
-            item.onclick = () => selectRepo(repo.full_name);
-            item.innerHTML = `<div style="padding-left: 0;"><div style="font-weight:600">${repo.full_name}</div></div><div>→</div>`;
-            ui.repoList.appendChild(item);
+// Helper: Relative Time
+function formatRelativeTime(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return date.toLocaleDateString();
+}
 
-            // Skip the active repo in the "all projects" list to avoid duplication
-            if (repo.full_name === settings.repo) return;
-
-            // Update Landing list...
-            const card = document.createElement('div');
-            card.className = 'project-card';
-            card.onclick = () => selectRepo(repo.full_name);
-            card.innerHTML = `
-                <div style="flex:1; padding-left: 0; transition: 0.3s; height: 100%; display: flex; flex-direction: column; justify-content: center;">
-                    <div class="project-name" style="margin-bottom: 4px;">${repo.name}</div>
-                    <div class="project-meta">Updated ${new Date(repo.updated_at).toLocaleDateString()}</div>
-                </div>
-            `;
-            ui.landingRepoList.appendChild(card);
+async function fetchInstallations() {
+    if (!settings.token) return;
+    
+    // Always clear and ensure some content exists so the dropdown has "volume"
+    ui.accountDropdown.innerHTML = '';
+    
+    try {
+        const res = await fetch('/github/api/user/installations', {
+            headers: { 'Authorization': `Bearer ${settings.token}` }
         });
-    } catch (e) { 
-        showToast(e.message, 'error'); 
-    } finally { 
-        ui.repoLoader.classList.add('hidden'); 
+        
+        if (res.status === 401) {
+            ui.selectedAccountName.textContent = 'Sign in';
+            const errItem = document.createElement('div');
+            errItem.className = 'dropdown-item';
+            errItem.style.color = 'var(--text-danger)';
+            errItem.innerHTML = '<span>Session expired. Click to re-login.</span>';
+            errItem.onclick = () => window.location.href = '/github/login';
+            ui.accountDropdown.appendChild(errItem);
+            throw new Error('Unauthorized');
+        }
+
+        const data = await res.json();
+        installations = data.installations || [];
+        
+        if (installations.length > 0) {
+            installations.forEach(inst => {
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+                item.innerHTML = `
+                    <img src="${inst.account.avatar_url}" class="account-avatar">
+                    <span>${inst.account.login}</span>
+                `;
+                item.onclick = (e) => {
+                    e.stopPropagation();
+                    ui.accountDropdown.classList.remove('open');
+                    selectInstallation(inst);
+                };
+                ui.accountDropdown.appendChild(item);
+            });
+        } else {
+             ui.selectedAccountName.textContent = "My Repositories";
+             fetchRepos();
+        }
+    } catch (err) {
+        console.error('Failed to fetch installations', err);
+        // We still continue to add the Manage link below
+    } finally {
+        // Clear "Loading..." or "Connect GitHub" state if we have a name
+        if (ui.selectedAccountName.textContent === 'Loading...' || ui.selectedAccountName.textContent === 'Connect GitHub') {
+            ui.selectedAccountName.textContent = 'My Repositories';
+        }
+
+        // Add "Manage GitHub accounts" item (ALWAYS)
+        const manageItem = document.createElement('div');
+        manageItem.className = 'dropdown-item';
+        manageItem.style.borderTop = '1px solid var(--border)';
+        manageItem.style.marginTop = '4px';
+        manageItem.style.color = 'var(--primary)';
+        manageItem.style.fontWeight = '600';
+        manageItem.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Manage GitHub accounts</span>
+        `;
+        manageItem.onclick = (e) => {
+            e.stopPropagation();
+            window.open('https://github.com/settings/installations', '_blank');
+        };
+        ui.accountDropdown.appendChild(manageItem);
+
+        // Auto-select logic moved to only if success
+        if (installations && installations.length > 0) {
+            const initial = installations.find(i => i.id == settings.installation_id) || installations[0];
+            if (initial) selectInstallation(initial);
+        } else if (!settings.token) {
+             ui.selectedAccountName.textContent = "Connect GitHub";
+        }
+    }
+}
+
+let currentInstallationToken = null;
+
+async function selectInstallation(inst) {
+    selectedInstallationId = inst.id;
+    settings.installation_id = inst.id;
+    localStorage.setItem('zcms-settings', JSON.stringify(settings));
+
+    ui.selectedAccountName.textContent = inst.account.login;
+    ui.selectedAccountAvatar.src = inst.account.avatar_url;
+    ui.ghAppSettingsLink.href = inst.html_url;
+    
+    // Clear search and fetch repos for this account
+    ui.repoSearchInput.value = '';
+    
+    // NEW: Get an installation-specific token from our backend
+    try {
+        const res = await fetch(`/github/api/app/installations/${inst.id}/access_tokens`, {
+            method: 'POST'
+        });
+        const data = await res.json();
+        if (data.token) {
+            currentInstallationToken = data.token;
+            console.log(`[CMS] Using installation token for ${inst.account.login}`);
+        } else {
+            currentInstallationToken = null;
+        }
+    } catch (err) {
+        console.error('Failed to get installation token, falling back to user token', err);
+        currentInstallationToken = null;
+    }
+
+    fetchRepos(inst.id);
+}
+
+// Global repo search listener
+ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
+
+async function fetchRepos(installationId = null) {
+    if (!settings.token) return;
+
+    ui.repoList.innerHTML = '<div class="loader"></div>';
+    
+    try {
+        const path = installationId ? `user/installations/${installationId}/repositories` : 'user/repos?sort=updated&per_page=100';
+        const res = await fetch(`/github/api/${path}`, {
+            headers: { 'Authorization': `Bearer ${currentInstallationToken || settings.token}` }
+        });
+        
+        let data = await res.json();
+        currentRepos = Array.isArray(data) ? data : (data.repositories || []);
+        
+        if (!Array.isArray(currentRepos)) {
+            const errorMsg = data.message || 'Failed to fetch repositories.';
+            ui.repoList.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-danger)">${errorMsg}</div>`;
+            return;
+        }
+
+        renderRepos();
+        
+    } catch (err) {
+        console.error('FetchRepos Error:', err);
+        ui.repoList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-danger)">Connection error.</div>';
+    }
+}
+
+function renderRepos(filter = '') {
+    const filtered = currentRepos.filter(r => r.full_name.toLowerCase().includes(filter.toLowerCase()));
+    
+    // Use the landing page grid for EVERYTHING now as requested
+    ui.landingRepoList.innerHTML = '';
+    
+    if (filtered.length === 0) {
+        ui.landingRepoList.innerHTML = '<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-muted)">No matching repositories.</div>';
+        return;
+    }
+
+    filtered.forEach(repo => {
+        const card = document.createElement('div');
+        card.className = 'project-card';
+        // Reuse the premium card style
+        card.innerHTML = `
+            <div style="flex:1">
+                <div class="project-name" style="display:flex; align-items:center; gap:8px;">
+                    ${repo.name}
+                    ${repo.private ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.4"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' : ''}
+                </div>
+                <div class="project-meta">Updated ${formatRelativeTime(repo.updated_at)}</div>
+            </div>
+            <div style="color: var(--primary); opacity: 0; transition: 0.2s;" class="open-indicator">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+        `;
+        
+        card.onmouseenter = () => card.querySelector('.open-indicator').style.opacity = '1';
+        card.onmouseleave = () => card.querySelector('.open-indicator').style.opacity = '0';
+        
+        card.onclick = () => selectRepo(repo.full_name);
+        ui.landingRepoList.appendChild(card);
+    });
+
+    // Also sync the modal list if it's ever used (fallback)
+    if (ui.repoList) {
+        ui.repoList.innerHTML = ui.landingRepoList.innerHTML;
+        Array.from(ui.repoList.children).forEach((child, i) => {
+            child.onclick = () => {
+                const repo = filtered[i];
+                if (repo) selectRepo(repo.full_name);
+            };
+        });
     }
 }
 
