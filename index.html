@@ -360,7 +360,7 @@
         .repo-controls { display: flex; gap: 12px; margin-bottom: 24px; align-items: stretch; position: relative; }
         
         .account-switcher-group {
-            flex: 1; max-width: 260px; display: flex; align-items: stretch; height: 44px; box-sizing: border-box;
+            width: 260px; flex-shrink: 0; display: flex; align-items: stretch; height: 44px; box-sizing: border-box;
             background: var(--bg); border: 1px solid var(--border);
             border-radius: 12px; transition: 0.2s; min-width: 0;
             position: relative;
@@ -810,10 +810,6 @@
                     <div class="dock-divider"></div>
                     
                     <div style="display:flex; gap:2px; padding: 0 4px;">
-                        <button class="dock-item" id="navRepos" title="Switch Project">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                        </button>
-                        <div class="dock-divider"></div>
                         <button class="dock-item icon-only" id="navBack" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
                         <button class="dock-item icon-only" id="navForward" title="Forward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></button>
                     </div>

@@ -55,8 +55,7 @@ const ui = {
     selectedAccountName: document.getElementById('selectedAccountName'),
     accountDropdown: document.getElementById('accountDropdown'),
     repoSearchInput: document.getElementById('repoSearchInput'),
-    ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
-    navRepos: document.getElementById('navRepos'),
+    ghAppSettingsLink: document.getElementById('ghAppSettingsLink')
 };
 
 let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
@@ -154,12 +153,6 @@ ui.btnToggle.onclick = () => {
 };
 
 ui.btnToggleLanding.onclick = () => ui.btnToggle.click();
-
-ui.navRepos.onclick = () => {
-    ui.stepPicker.classList.remove('hidden');
-    ui.previewLoader.classList.add('hidden'); // Hide loader if we're picking repos
-    fetchRepos(); // Refresh repo list if we're switching
-};
 
 ui.btnClose.onclick = () => {
     const hasChanges = Object.keys(changes).length > 0;
@@ -575,6 +568,14 @@ async function fetchRepos(installationId = null) {
             const errorMsg = data.message || 'Failed to fetch repositories.';
             ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">${errorMsg}</div>`;
             return;
+        }
+
+        // AUTO-SELECT RECENT REPOSITORY
+        // If the user hasn't selected a repo yet, pre-fill the Hero section with their most recently updated one!
+        if (!settings.repo && currentRepos.length > 0) {
+            settings.repo = currentRepos[0].full_name;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            refreshLandingUI();
         }
 
         renderRepos();
