@@ -138,6 +138,11 @@ ui.btnToggle.onclick = () => {
 ui.btnToggleLanding.onclick = () => ui.btnToggle.click();
 
 ui.btnClose.onclick = () => {
+    const hasChanges = Object.keys(changes).length > 0;
+    if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to exit and discard them?')) {
+        return;
+    }
+
     ui.dashboard.classList.add('closing');
     localStorage.removeItem('zcms-dashboard-open');
     setTimeout(() => {
@@ -336,7 +341,20 @@ async function startCmsEngine(repo, token) {
     if (!cmsService.serverUrl && !cmsService.isBooting) {
         cmsService.repoUrl = `https://github.com/${repo}`;
         cmsService.token = token;
-        await cmsService.boot(localStorage.getItem('zcms-manual-command'));
+        
+        // Start a watchdog timer to help users if it hangs
+        const bootWatchdog = setTimeout(() => {
+            if (!cmsService.serverUrl) {
+                ui.loaderStatus.textContent = "Booting is taking longer than expected... Try refreshing if it hangs.";
+                showToast("Initialization slow. Please wait or reload.", "info");
+            }
+        }, 25000);
+
+        try {
+            await cmsService.boot(cmsService.repoUrl, localStorage.getItem('zcms-manual-command'));
+        } finally {
+            clearTimeout(bootWatchdog);
+        }
     } else if (cmsService.serverUrl) {
         ui.preview.src = cmsService.serverUrl;
         ui.siteUrl.textContent = 'Live Preview Active';
@@ -444,6 +462,11 @@ async function fetchRepos() {
 }
 
 function selectRepo(name) {
+    const hasChanges = Object.keys(changes).length > 0;
+    if (hasChanges && !confirm('You have unsaved changes in your current project. Switching repositories will discard them. Proceed?')) {
+        return;
+    }
+
     settings.repo = name;
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
     ui.stepPicker.classList.add('hidden');
@@ -629,3 +652,10 @@ ui.saveBtn.onclick = async () => {
          ui.saveBtn.innerHTML = oldHTML;
      }
 };
+
+window.addEventListener('beforeunload', (e) => {
+    if (Object.keys(changes).length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});

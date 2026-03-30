@@ -136,6 +136,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(proxyRes.statusCode, {
         'Content-Type': proxyRes.headers['content-type'],
         'Cross-Origin-Resource-Policy': 'cross-origin',
+        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=0, s-maxage=10'
       });
       proxyRes.pipe(res);
@@ -277,7 +278,7 @@ const server = http.createServer((req, res) => {
           'Content-Type': contentType,
           'Cross-Origin-Embedder-Policy': 'require-corp',
           'Cross-Origin-Opener-Policy': 'same-origin',
-          'Permissions-Policy': 'interest-cohort=()'
+          'Permissions-Policy': 'interest-cohort=(), browsing-topics=()'
       });
       res.end(content, 'utf-8');
     }

@@ -42,7 +42,17 @@ export class WebContainerGitService {
   /**
    * Initialize the entire pipeline: Git -> WebContainer -> Dev Server
    */
-  async boot(manualCommand = null) {
+  async boot(requestedRepoUrl, manualCommand = null) {
+    // Reset if a different repository is requested
+    if (this.repoUrl && this.repoUrl !== requestedRepoUrl) {
+        this.onLog(`[Service] Repository changed from ${this.repoUrl} to ${requestedRepoUrl}. Performing reset...`);
+        if (this.serverProcess) this.serverProcess.kill();
+        if (this.middlewareProc) this.middlewareProc.kill();
+        this.serverUrl = null;
+        this.middlewareStarted = false;
+        await this.wipeDir(this.dir).catch(() => {});
+    }
+
     if (this.serverUrl) {
         this.onLog('[Service] Engine already running. Skipping boot.');
         return;
@@ -51,10 +61,11 @@ export class WebContainerGitService {
         this.onLog('[Service] Engine is already initializing. Please wait...');
         return;
     }
+
+    this.repoUrl = requestedRepoUrl;
     this.isBooting = true;
     try {
       this.onStatusChange('Initializing FileSystem...');
-      const fsExists = await this.fs.readdir(this.dir).then(e => e.length > 0).catch(() => false);
       
       // Start WebContainer and Git Fetching in Parallel
       const [container, gitResult] = await Promise.all([
@@ -413,25 +424,10 @@ server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge 
        this.middlewareProc.kill();
     }
 
-    this.onStatusChange(`Running: ${devCommand}...`);
-    const cmdTokens = devCommand.split(' ');
-    const cmd = cmdTokens[0];
-    const args = cmdTokens.slice(1);
-    
-    this.serverProcess = await this.webcontainerInstance.spawn(cmd, args);
-    const serverProcess = this.serverProcess;
-    
-    serverProcess.output.pipeTo(new WritableStream({
-      write: (data) => {
-          if (this.isDevMode) console.log(`[server] ${data}`);
-      }
-    }));
-
-    this.middlewareStarted = false;
-
-    // Listen for the server-ready event of WebContainers
+    // 1. Listen for the server-ready event of WebContainers BEFORE spawning
+    // This avoids a race condition where the server starts faster than we attach the listener.
     this.webcontainerInstance.on('server-ready', async (port, url) => {
-      // 1. If it's the first port (not our middleware), start the middleware
+      // a. If it's the first port (not our middleware), start the middleware
       if (port !== 3001 && !this.middlewareStarted) {
         this.middlewareStarted = true;
         this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
@@ -450,7 +446,7 @@ server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge 
         }
       }
 
-      // 2. If it's our middleware port, we are ready to preview!
+      // b. If it's our middleware port, we are ready to preview!
       if (port === 3001) {
         this.serverUrl = url;
         this.onLog(`[Middleware] CMS Bridge Ready! Loading preview...`);
@@ -459,6 +455,21 @@ server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge 
       }
     });
 
+    this.onStatusChange(`Running: ${devCommand}...`);
+    const cmdTokens = devCommand.split(' ');
+    const cmd = cmdTokens[0];
+    const args = cmdTokens.slice(1);
+    
+    this.serverProcess = await this.webcontainerInstance.spawn(cmd, args);
+    const serverProcess = this.serverProcess;
+    
+    serverProcess.output.pipeTo(new WritableStream({
+      write: (data) => {
+          if (this.isDevMode) console.log(`[server] ${data}`);
+      }
+    }));
+
+    this.middlewareStarted = false;
     return serverProcess;
   }
 
