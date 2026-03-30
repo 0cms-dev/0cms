@@ -14,8 +14,8 @@
     "@isomorphic-git/lightning-fs": "^4.6.2",
     "@webcontainer/api": "^1.6.1",
     "buffer": "^6.0.3",
+    "hono": "^4.12.9",
     "isomorphic-git": "^1.37.4"
   },
-  "devDependencies": {
-  }
+  "devDependencies": {}
 }

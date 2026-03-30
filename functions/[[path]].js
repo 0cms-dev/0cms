@@ -1,4 +1,5 @@
-import { Hono } from 'https://esm.sh/hono';
+import { Hono } from 'hono';
+import { handle } from 'hono/cloudflare-pages';
 
 const app = new Hono();
 
@@ -123,4 +124,4 @@ app.all('/git-proxy/:protocol/:path{.+}', async (c) => {
     return new Response(body, { status: statusCode, headers: responseHeaders });
 });
 
-export default app;
+export const onRequest = handle(app);
