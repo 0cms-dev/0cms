@@ -109,11 +109,6 @@
         .demo-mode #cmsDashboard { display: none !important; }
         .demo-mode:not(.demo-mode-child) #cmsDashboard { display: flex !important; } /* Main dashboard stays visible */
 
-        /* In the demo iframe: hide irrelevant chrome so the page looks clean */
-        .demo-mode-child header,
-        .demo-mode-child footer { display: none !important; }
-        .demo-mode-child main { padding-top: 2rem !important; }
-
         .demo-mode .cms-demo-shell-badge { display: block; }
         
         .cms-demo-shell-badge {
@@ -423,6 +418,8 @@
             transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .dashboard-main.drawer-left-open { padding-left: 340px; }
+        .dashboard-main.demo-active { padding-left: 0 !important; }
+        .dashboard-main.demo-active #cmsDrawer { display: none !important; }
         /* No right drawer shift anymore */
 
         .dashboard-main.drawer-left-open.drawer-right-open .command-pill { left: 50%; }
@@ -650,6 +647,7 @@
             transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .cms-main-area.drawer-left-open { padding-left: 340px; }
+        .dashboard-main.demo-active .cms-main-area { padding-left: 0 !important; }
         /* No padding-right shift for SEO anymore */
         
         /* SLATE TERMINAL OVERLAY */
@@ -754,7 +752,7 @@
             pointer-events: none;
         }
         .json-card-pill {
-            display: inline-flex; align-items: center; gap: 10px; background: var(--bg); 
+            display: inline-flex !important; align-items: center; gap: 10px; background: var(--bg); 
             padding: 14px 28px; border-radius: 16px; border: 1px solid var(--border); 
             box-shadow: 0 4px 12px rgba(0,0,0,0.03); font-weight: 600; color: var(--text);
             transition: 0.2s; font-size: 0.95rem; z-index: 2; position: relative;
@@ -990,7 +988,7 @@
 
             <section class="json-card">
                 <div style="position: relative; z-index: 2;">
-                    <div style="display:inline-flex; align-items:center; gap:8px; padding: 6px 16px; background: rgba(124, 58, 237, 0.1); border-radius: 20px; color: var(--primary); font-size: 0.85rem; font-weight: 700; margin-bottom: 24px;">
+                    <div style="display:inline-flex; align-items:center; gap:8px; padding: 6px 16px; background: rgba(124, 58, 237, 0.1); border-radius: 20px; color: var(--primary); font-size: 0.85rem; font-weight: 700; margin-bottom: 24px; font-family: 'Inter', sans-serif;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                         Convention Over Configuration
                     </div>
@@ -999,19 +997,19 @@
                         Say goodbye to complex configuration files and rigid schemas. ZeroCMS intelligently infers your content framework directly from your active code. Simply connect your repository, and it builds a dynamic visual editor instantly.
                     </p>
                     <div style="display: flex; justify-content: center; gap: 24px; align-items: center; flex-wrap: wrap;">
-                        <div class="json-card-pill">
+                        <div class="json-card-pill" style="font-family: 'Inter', sans-serif; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
                             Zero Config
                         </div>
-                        <div class="json-card-pill">
+                        <div class="json-card-pill" style="font-family: 'Inter', sans-serif; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
                             No Database
                         </div>
-                        <div class="json-card-pill">
+                        <div class="json-card-pill" style="font-family: 'Inter', sans-serif; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
@@ -1052,6 +1050,13 @@
                     See your changes here! 💡
                 </div>
                 <div class="command-pill">
+                    <button id="cmsModeToggle" class="dock-item active" title="Switch Mode (T)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                        <span id="cmsModeLabel">Text Mode</span>
+                    </button>
+                    
+                    <div class="dock-divider"></div>
+                    
                     <div class="url-chip">
                         <span id="cmsStatusDot" class="status-dot off"></span>
                         <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>

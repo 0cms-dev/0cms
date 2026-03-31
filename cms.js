@@ -6,7 +6,18 @@ class ZeroConfigCMS {
     this.inIframe = window.self !== window.top;
     this.historyStack = [];
     this.redoStack = [];
+    this.editMode = 'text';
     this.init();
+  }
+
+  toggleMode(mode) {
+    this.editMode = mode;
+    this.portalHL.classList.remove('active');
+    if (mode === 'layout') {
+      this.portalHL.classList.add('layout-mode');
+    } else {
+      this.portalHL.classList.remove('layout-mode');
+    }
   }
 
   init() {
@@ -202,52 +213,50 @@ class ZeroConfigCMS {
         100% { outline-color: rgba(124, 58, 237, 0.4); box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); }
       }
       @keyframes cmsSelectPulse {
-        0% { outline-color: rgba(59, 130, 246, 0.4); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
-        50% { outline-color: rgba(59, 130, 246, 0.9); box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
-        100% { outline-color: rgba(59, 130, 246, 0.4); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
+        0% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.01); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.8; }
       }
 
       .cms-editable { 
-        transition: background-color 0.3s ease, border-radius 0.3s ease; 
-        border-radius: 4px;
-        outline: 2px dashed transparent; 
-        outline-offset: 2px;
+        transition: background-color 0.2s ease; 
+        outline: none !important;
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
       }
       
       .cms-editable:hover:not(:focus) { 
-        cursor: text; 
-        border-radius: 6px !important; 
-        outline: 2px dashed rgba(59, 130, 246, 0.8) !important;
-        outline-offset: 6px !important; 
-        background-color: rgba(59, 130, 246, 0.05);
-        animation: cmsSelectPulse 2s infinite ease-in-out !important; 
-        position: relative; z-index: 9999;
-      }
-      
-      .cms-editable.cms-edited:hover:not(:focus) {
-        outline-color: rgba(  0.9) !important;
-        background-color: rgba(124, 58, 237, 0.05);
-        animation: cmsDraftPulse 2s infinite ease-in-out !important;
+        background-color: rgba(59, 130, 246, 0.03);
+        cursor: text;
       }
       
       .cms-editable:focus { 
-        border-radius: 6px !important;
-        outline: 2px solid #10b981 !important;
-        outline-offset: 6px !important; 
-        background-color: rgba(46, 204, 113, 0.05); 
-        box-shadow: 0 0 15px rgba(46, 204, 113, 0.3) !important;
-        animation: none !important;
+        outline: none !important;
+        background-color: rgba(59, 130, 246, 0.05); 
+        box-shadow: none !important;
       }
 
+      .cms-portal-hl {
+        position: fixed; pointer-events: none;
+        border: 2px dashed #3b82f6; border-radius: 8px;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        z-index: 10000; transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        opacity: 0;
+        backdrop-filter: blur(2px);
+        background: rgba(59, 130, 246, 0.05);
+      }
+      .cms-portal-hl.active { 
+        opacity: 1; 
+        animation: cmsSelectPulse 2s infinite ease-in-out;
+      }
+      .cms-portal-hl.editing { border: 2px solid #10b981; border-radius: 0; background: transparent; animation: none; }
+      .cms-portal-hl.layout-mode { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.05); }
+
       .cms-img-container { position: relative; display: inline-block; vertical-align: middle; max-width: 100%; transition: all 0.3s ease; }
-      .cms-img-container img { cursor: crosshair; transition: all 0.3s ease; border-radius: 4px; outline: 2px solid transparent; outline-offset: 2px; }
+      .cms-img-container img { cursor: crosshair; transition: all 0.3s ease; border-radius: 4px; }
       
       .cms-img-container:hover:not(.focused) img { 
         transform: scale(1.02); 
-        border-radius: 8px !important;
-        outline: 2px dashed rgba(59, 130, 246, 0.8) !important;
-        outline-offset: 6px !important;
-        animation: cmsSelectPulse 2s infinite ease-in-out !important;
       }
       .cms-img-container.cms-edited:hover:not(.focused) img {
         outline-color: rgba(124, 58, 237, 0.9) !important;
@@ -255,10 +264,13 @@ class ZeroConfigCMS {
       }
 
       .cms-img-overlay, .cms-block-menu { 
-        position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; 
-        opacity: 0; transition: opacity 0.2s; z-index: 10000; 
+        position: fixed; display: flex; gap: 6px; 
+        opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10000; 
       }
-      .cms-img-container:hover .cms-img-overlay, .cms-block:hover .cms-block-menu { opacity: 1; }
+      .cms-block-menu.active { opacity: 1; pointer-events: auto; }
+      .cms-img-container:hover .cms-img-overlay { opacity: 1; }
+      
+      .cms-ui-overlay-container { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 99999; }
       
       .cms-btn { 
         background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -301,11 +313,61 @@ class ZeroConfigCMS {
 
   enable() {
     if (this.active) return;
-    if (window.location.protocol === 'file:') {
-      alert('Zero-Config CMS: ES Modules are blocked on file:// protocol. Please use a local server.');
-    }
     this.active = true;
     this.scanAndApply();
+
+    this.uiContainer = document.createElement('div');
+    this.uiContainer.className = 'cms-ui-overlay-container cms-ui';
+    document.body.appendChild(this.uiContainer);
+
+    this.portalHL = document.createElement('div');
+    this.portalHL.className = 'cms-portal-hl';
+    this.uiContainer.appendChild(this.portalHL);
+    
+    this.blockMenu = document.createElement('div');
+    this.blockMenu.className = 'cms-block-menu cms-ui';
+    this.blockMenu.innerHTML = `
+      <button class="cms-btn">Duplicate</button>
+      <button class="cms-btn cms-btn-danger">Delete</button>
+    `;
+    this.uiContainer.appendChild(this.blockMenu);
+
+    // Track mouse to position portal highlights
+    document.addEventListener('mouseover', (e) => {
+      const isLayout = this.editMode === 'layout';
+      const target = isLayout 
+        ? e.target.closest('.cms-block') 
+        : e.target.closest('.cms-editable');
+        
+      if (target && !target.closest('.cms-ui')) {
+        this.updatePortalHL(target);
+      } else {
+        this.portalHL.classList.remove('active');
+        if (!e.relatedTarget || !e.relatedTarget.closest('.cms-block-menu')) {
+          this.blockMenu.classList.remove('active');
+        }
+      }
+    });
+
+    window.addEventListener('scroll', () => {
+      const activeEl = document.querySelector('.cms-editable:hover, .cms-block:hover');
+      if (activeEl) this.updatePortalHL(activeEl);
+    }, { passive: true });
+  }
+
+  updatePortalHL(el) {
+    const rect = el.getBoundingClientRect();
+    this.portalHL.style.top = `${rect.top}px`;
+    this.portalHL.style.left = `${rect.left}px`;
+    this.portalHL.style.width = `${rect.width}px`;
+    this.portalHL.style.height = `${rect.height}px`;
+    this.portalHL.classList.add('active');
+    
+    if (el.contentEditable === 'plaintext-only') {
+      this.portalHL.classList.add('editing');
+    } else {
+      this.portalHL.classList.remove('editing');
+    }
   }
 
   disable() {
@@ -322,6 +384,7 @@ class ZeroConfigCMS {
     });
     document.querySelectorAll('.cms-block-menu').forEach(m => m.remove());
     document.querySelectorAll('.cms-block').forEach(b => b.classList.remove('cms-block'));
+    if (this.uiContainer) this.uiContainer.remove();
   }
 
   getSelector(el) {
@@ -559,14 +622,36 @@ class ZeroConfigCMS {
     el.dataset.cmsReady = 'true';
     if (!el.dataset.cmsOriginal) el.dataset.cmsOriginal = el.innerText;
     
+    el.classList.add('cms-editable');
+    
+    // Lazy contentEditable: only trigger on mousedown to prevent layout jumps
+    el.addEventListener('mousedown', () => {
+      if (this.editMode !== 'text') return; // Can't edit text in layout mode
+      
+      // Cleanup whitespace from HTML
+      if (el.innerText.trim() !== el.innerText) {
+        el.innerText = el.innerText.trim();
+      }
+      
+      el.contentEditable = 'plaintext-only';
+      this.updatePortalHL(el);
+    });
+
     // Resolve source file information from the element or body
     const sourceFile = el.getAttribute('data-astro-source-file') || document.body.dataset.cmsSource;
     if (sourceFile) el.dataset.cmsSource = sourceFile;
 
-    el.classList.add('cms-editable');
-    try { el.contentEditable = 'plaintext-only'; } catch (e) { el.contentEditable = 'true'; }
-    el.onblur = () => this.saveChange(this.getSelector(el), el.innerText);
-    el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } };
+    el.onblur = () => {
+      el.contentEditable = 'false';
+      this.portalHL.classList.remove('editing');
+      this.saveChange(this.getSelector(el), el.innerText);
+    };
+    el.onkeydown = (e) => { 
+      if (e.key === 'Enter') { 
+        e.preventDefault(); 
+        el.blur(); 
+      } 
+    };
   }
 
   makeImageEditable(img) {
@@ -592,27 +677,45 @@ class ZeroConfigCMS {
 
   makeBlockActionable(block) {
     if (block.classList.contains('cms-block')) return;
-    if (block.classList.contains('json-card-pill')) return; // Don't blockify small pills
+    if (block.classList.contains('json-card-pill')) return; // No menus on pills
     block.classList.add('cms-block');
-    const menu = document.createElement('div');
-    menu.className = 'cms-block-menu cms-ui';
-    menu.append(
-      this.createBtn('Duplicate', () => {
+
+    block.addEventListener('mouseenter', () => {
+      if (block.contentEditable === 'plaintext-only') return;
+      
+      const rect = block.getBoundingClientRect();
+      this.blockMenu.style.top = `${rect.top + 8}px`;
+      this.blockMenu.style.left = `${rect.right - 120}px`;
+      this.blockMenu.classList.add('active');
+      
+      this.blockMenu.onmouseenter = () => this.blockMenu.classList.add('active');
+      this.blockMenu.onmouseleave = () => this.blockMenu.classList.remove('active');
+
+      const [dup, del] = this.blockMenu.querySelectorAll('button');
+      dup.onclick = (e) => { 
+        e.stopPropagation(); 
         const clone = block.cloneNode(true);
         clone.classList.remove('cms-block');
-        clone.querySelectorAll('.cms-ui').forEach(ui => ui.remove());
-        clone.querySelectorAll('[data-cms-ready]').forEach(el => {
-          delete el.dataset.cmsReady;
-          el.classList.remove('cms-editable', 'cms-img-editable', 'cms-block');
-        });
+        clone.querySelectorAll('[data-cms-ready]').forEach(el => delete el.dataset.cmsReady);
         block.parentNode.insertBefore(clone, block.nextSibling);
         this.scanAndApply();
-      }),
-      this.createBtn('Delete', () => {
-        if (confirm('Permanently delete this block?')) block.remove();
-      }, true)
-    );
-    block.appendChild(menu);
+      };
+      del.onclick = (e) => { 
+        e.stopPropagation(); 
+        if (confirm('Delete this block?')) {
+          block.remove();
+          this.blockMenu.classList.remove('active');
+        }
+      };
+    });
+
+    block.addEventListener('mouseleave', (e) => {
+      setTimeout(() => {
+        if (!this.blockMenu.matches(':hover')) {
+          this.blockMenu.classList.remove('active');
+        }
+      }, 100);
+    });
   }
 
   createBtn(text, onclick, danger = false) {
