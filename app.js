@@ -5,11 +5,9 @@ const ui = {
     dashboard: document.getElementById('cmsDashboard'),
     landingProject: document.getElementById('cmsLandingProject'),
     landingRepoName: document.getElementById('landingRepoName'),
-    btnToggle: document.getElementById('toggleCmsBtn'),
-    btnPublish: document.getElementById('publishSync'),
+    landingAuthAction: document.getElementById('heroAuthAction'),
+    landingLoginBtn: document.getElementById('landingLoginBtn'),
     btnClose: document.getElementById('btnCloseCms'),
-    statusText: document.querySelector('.admin-bar span strong'),
-    counter: document.getElementById('cmsCounter'),
     preview: document.getElementById('cmsPreviewFrame'),
     statusLabel: document.getElementById('cmsStatusLabel'),
     statusDot: document.getElementById('cmsStatusDot'),
@@ -37,8 +35,6 @@ const ui = {
     previewLoader: document.getElementById('previewLoader'),
     navBack: document.getElementById('navBack'),
     navForward: document.getElementById('navForward'),
-    landingAuthAction: document.getElementById('heroAuthAction'),
-    landingLoginBtn: document.getElementById('landingLoginBtn'),
     landingRepoSection: document.getElementById('landingRepoSection'),
     landingRepoList: document.getElementById('landingRepoList'),
     btnToggleLanding: document.getElementById('toggleCmsBtnLanding'),
@@ -55,25 +51,21 @@ const ui = {
     selectedAccountName: document.getElementById('selectedAccountName'),
     accountDropdown: document.getElementById('accountDropdown'),
     repoSearchInput: document.getElementById('repoSearchInput'),
-    ghAppSettingsLink: document.getElementById('ghAppSettingsLink')
+    ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
+    prewarmLoader: document.getElementById('prewarmLoader')
+};
+
+// Helper to safely bind events without crashing if element is missing
+const safeBind = (el, event, handler) => {
+    if (el) el[event] = handler;
 };
 
 let settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
 
 // --- AUTHENTICATION FLOW ---
-// Extract token from URL if returning from GitHub OAuth
-const urlParams = new URLSearchParams(window.location.search);
-const tokenFromUrl = urlParams.get('token');
-const installIdFromUrl = urlParams.get('installation_id');
+// Extraction from URL is handled in <head> for zero-flicker experience.
+// We just need to ensure our local 'settings' object matches localStorage.
 
-if (tokenFromUrl) {
-    settings.token = tokenFromUrl;
-    if (installIdFromUrl) settings.installation_id = installIdFromUrl;
-    localStorage.setItem('zcms-settings', JSON.stringify(settings));
-    // Clean up the URL for a premium zero-config look
-    window.history.replaceState({}, document.title, window.location.pathname);
-    // fetchRepos() will be called by refreshLandingUI() below
-}
 
 let cmsActive = false;
 let cmsService = null;
@@ -95,18 +87,15 @@ function getActiveToken() {
 }
 
 // --- EVENT LISTENERS (CRITICAL FIRST) ---
-if (ui.accountSwitcherBtn) {
-    ui.accountSwitcherBtn.onclick = (e) => {
-        e.stopPropagation();
-        const isOpen = ui.accountDropdown.classList.contains('open');
-        ui.accountDropdown.classList.toggle('open', !isOpen);
-        ui.accountSwitcherBtn.classList.toggle('active', !isOpen);
-    };
-}
+safeBind(ui.accountSwitcherBtn, 'onclick', (e) => {
+    e.stopPropagation();
+    if (!ui.accountDropdown) return;
+    const isOpen = ui.accountDropdown.classList.contains('open');
+    ui.accountDropdown.classList.toggle('open', !isOpen);
+    ui.accountSwitcherBtn.classList.toggle('active', !isOpen);
+});
 
-if (ui.repoSearchInput) {
-    ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
-}
+safeBind(ui.repoSearchInput, 'oninput', (e) => renderRepos(e.target.value));
 
 document.addEventListener('click', (e) => {
     if (ui.accountDropdown && ui.accountSwitcherBtn && !ui.accountSwitcherBtn.contains(e.target)) {
@@ -118,43 +107,55 @@ document.addEventListener('click', (e) => {
 // Unconditionally refresh UI state on load to ensure persistence
 refreshLandingUI();
 
-// Auto-reopen dashboard if it was open before.
-// We reuse the pre-warming service to avoid a double boot.
-if (localStorage.getItem('zcms-dashboard-open') === 'true' && settings.repo && settings.token) {
-    // Wait a tick so the pre-warm has registered, then click
-    setTimeout(() => ui.btnToggle.click(), 100);
-}
 
 // 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo
-const preWarmingService = new WebContainerGitService();
+let preWarmingService = null;
 if (settings.repo && settings.token) {
+    preWarmingService = new WebContainerGitService();
     preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
     preWarmingService.token = getActiveToken();
     preWarmPromise = preWarmingService.initWebContainer()
         .then(() => preWarmingService.boot(preWarmingService.repoUrl, localStorage.getItem('zcms-manual-command')))
         .catch(e => console.error('Pre-warm failed:', e));
-} else {
-    preWarmPromise = preWarmingService.initWebContainer();
 }
 
+
 // 2. DASHBOARD UI CONTROLS
-ui.btnToggle.onclick = () => {
+window.openDashboard = async () => {
+    if (!ui.dashboard) return;
+    
+    // If engine is still pre-warming, show loader on the button
+    if (preWarmPromise) {
+        const btn = ui.btnToggleLanding;
+        if (btn && ui.prewarmLoader) {
+            ui.prewarmLoader.style.display = 'block';
+            btn.classList.add('loading');
+            try {
+                await preWarmPromise;
+            } finally {
+                ui.prewarmLoader.style.display = 'none';
+                btn.classList.remove('loading');
+            }
+        }
+    }
+
     ui.dashboard.style.display = 'flex';
-    localStorage.setItem('zcms-dashboard-open', 'true');
     if (settings.repo && settings.token) {
-        ui.stepLogin.classList.add('hidden');
-        ui.stepPicker.classList.add('hidden');
-        startCmsEngine(settings.repo, getActiveToken());
+        if (ui.stepLogin) ui.stepLogin.classList.add('hidden');
+        if (ui.stepPicker) ui.stepPicker.classList.add('hidden');
+        await startCmsEngine(settings.repo, getActiveToken());
     } else if (settings.token) {
-        ui.stepLogin.classList.add('hidden');
-        ui.stepPicker.classList.remove('hidden');
+        if (ui.stepLogin) ui.stepLogin.classList.add('hidden');
+        if (ui.stepPicker) ui.stepPicker.classList.remove('hidden');
         fetchRepos();
     }
 };
 
-ui.btnToggleLanding.onclick = () => ui.btnToggle.click();
 
-ui.btnClose.onclick = () => {
+
+safeBind(ui.btnToggleLanding, 'onclick', window.openDashboard);
+
+safeBind(ui.btnClose, 'onclick', () => {
     const hasChanges = Object.keys(changes).length > 0;
     if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to exit and discard them?')) {
         return;
@@ -166,12 +167,13 @@ ui.btnClose.onclick = () => {
         ui.dashboard.style.display = 'none';
         ui.dashboard.classList.remove('closing');
     }, 400);
-};
+});
 
-ui.loginBtn.onclick = () => window.location.href = '/github/login';
-ui.landingLoginBtn.onclick = () => window.location.href = '/github/login';
+safeBind(ui.loginBtn, 'onclick', () => window.location.href = '/github/login');
+safeBind(ui.landingLoginBtn, 'onclick', () => window.location.href = '/github/login');
 
-ui.navNewPage.onclick = async () => {
+
+safeBind(ui.navNewPage, 'onclick', async () => {
     const isVisible = ui.createPanel.style.display === 'flex';
     if (isVisible) {
         ui.createPanel.style.display = 'none';
@@ -224,11 +226,12 @@ ui.navNewPage.onclick = async () => {
             ui.createList.appendChild(btn);
         });
     }
-};
+});
 
 ui.pageSettingsPanel = document.getElementById('cmsPageSettingsPanel');
 
-ui.navSEO.onclick = () => {
+safeBind(ui.navHistory, 'onclick', () => window.toggleHistory());
+safeBind(ui.navSEO, 'onclick', () => {
     const isVisible = ui.pageSettingsPanel.style.display === 'flex';
     if (isVisible) {
         ui.pageSettingsPanel.style.display = 'none';
@@ -236,11 +239,10 @@ ui.navSEO.onclick = () => {
     } else {
         ui.pageSettingsPanel.style.display = 'flex';
         ui.navSEO.classList.add('active');
-        ui.createPanel.style.display = 'none';
         ui.navNewPage.classList.remove('active');
         ui.preview.contentWindow.postMessage({ type: 'CMS_GET_SEO' }, '*');
     }
-};
+});
 
 const syncSEO = () => {
      ui.preview.contentWindow.postMessage({
@@ -251,9 +253,10 @@ const syncSEO = () => {
     }, '*');
 };
 
-ui.seoTitle.oninput = syncSEO;
-ui.seoDesc.oninput = syncSEO;
-ui.seoImage.oninput = syncSEO;
+safeBind(ui.seoTitle, 'oninput', syncSEO);
+safeBind(ui.seoDesc, 'oninput', syncSEO);
+safeBind(ui.seoImage, 'oninput', syncSEO);
+
 
 // Window Event Listener for generic postMessages from iframe
 window.addEventListener('message', (e) => {
@@ -290,13 +293,21 @@ const updateViewport = (view) => {
     }
 };
 
-ui.viewDesktop.onclick = () => updateViewport('desktop');
-ui.viewTablet.onclick = () => updateViewport('tablet');
-ui.viewMobile.onclick = () => updateViewport('mobile');
+safeBind(ui.viewDesktop, 'onclick', () => updateViewport('desktop'));
+safeBind(ui.viewTablet, 'onclick', () => updateViewport('tablet'));
+safeBind(ui.viewMobile, 'onclick', () => updateViewport('mobile'));
+
 
 // CMS Initialization Logic
 async function startCmsEngine(repo, token) {
+    if (cmsActive) return;
+    cmsActive = true;
+    
     ui.repoDisplay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${repo}`;
+    
+    if (!preWarmingService) {
+        preWarmingService = new WebContainerGitService();
+    }
     cmsService = preWarmingService;
     
     cmsService.onLog = (msg) => {
@@ -375,26 +386,28 @@ async function startCmsEngine(repo, token) {
 
 // 0. UI REFRESH: Project Awareness
 async function refreshLandingUI() {
+    // Sync with head-script changes
+    settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
+    
     if (settings.token) {
+
         // User is connected! UI should reflect this "forever"
-        ui.landingLoginBtn.classList.add('hidden');
-        ui.landingRepoSection.classList.remove('hidden');
-        
         // Fetch all account installations in background
         await fetchInstallations();
 
+        // OPTIMISTIC PRE-FILL: Use last known repo immediately
         if (settings.repo) {
-            ui.landingProject.classList.remove('hidden');
-            ui.landingRepoName.textContent = settings.repo;
+            if (ui.landingProject) ui.landingProject.classList.remove('hidden');
+            if (ui.landingRepoName) ui.landingRepoName.textContent = settings.repo;
         } else {
-            ui.landingProject.classList.add('hidden');
+            if (ui.landingProject) ui.landingProject.classList.add('hidden');
         }
     } else {
         // Fresh start - show connect action
-        ui.landingLoginBtn.classList.remove('remove');
-        ui.landingLoginBtn.classList.remove('hidden');
-        ui.landingProject.classList.add('hidden');
-        ui.landingRepoSection.classList.add('hidden');
+        document.documentElement.classList.remove('authenticated');
+        if (ui.landingLoginBtn) ui.landingLoginBtn.classList.remove('hidden');
+        if (ui.landingProject) ui.landingProject.classList.add('hidden');
+        if (ui.landingRepoSection) ui.landingRepoSection.classList.add('hidden');
     }
 }
 
@@ -426,14 +439,11 @@ async function fetchInstallations() {
         });
         
         if (res.status === 401) {
-            ui.selectedAccountName.textContent = 'Sign in';
-            const errItem = document.createElement('div');
-            errItem.className = 'dropdown-item';
-            errItem.style.color = 'var(--text-danger)';
-            errItem.innerHTML = '<span>Session expired. Click to re-login.</span>';
-            errItem.onclick = () => window.location.href = '/github/login';
-            ui.accountDropdown.appendChild(errItem);
-            throw new Error('Unauthorized');
+            delete settings.token;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            document.documentElement.classList.remove('authenticated');
+            refreshLandingUI();
+            return;
         }
 
         const data = await res.json();
@@ -554,14 +564,15 @@ async function fetchRepos(installationId = null) {
         const res = await fetch(`/github/api/${path}`, {
             headers: { 'Authorization': `Bearer ${settings.token}` }
         });
-        
-        let data;
-        try {
-            data = await res.json();
-        } catch(e) {
-            data = { message: 'Failed to read JSON from API' };
+        if (res.status === 401) {
+            delete settings.token;
+            localStorage.setItem('zcms-settings', JSON.stringify(settings));
+            document.documentElement.classList.remove('authenticated');
+            refreshLandingUI();
+            return;
         }
-        
+
+        const data = await res.json();
         currentRepos = Array.isArray(data) ? data : (data.repositories || []);
         
         if (!Array.isArray(currentRepos)) {
@@ -575,8 +586,8 @@ async function fetchRepos(installationId = null) {
         if (!settings.repo && currentRepos.length > 0) {
             settings.repo = currentRepos[0].full_name;
             localStorage.setItem('zcms-settings', JSON.stringify(settings));
-            refreshLandingUI();
         }
+
 
         renderRepos();
         
@@ -647,7 +658,7 @@ function selectRepo(name) {
     startCmsEngine(name, getActiveToken());
     // Explicitly open the dashboard UI
     if (ui.dashboard.style.display !== 'flex') {
-        ui.btnToggle.click();
+        window.openDashboard();
     }
 }
 
@@ -681,9 +692,6 @@ window.onmessage = (e) => {
         // Update dynamic status
         ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
         ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
-
-        ui.counter.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} saved`;
-        ui.counter.style.display = 'inline';
 
         // REAL-TIME SYNC: Apply the last change to the WebContainer FS
         if (entries.length > 0 && cmsService) {
@@ -775,45 +783,80 @@ if (urlChip) {
     urlChip.onclick = () => window.toggleHistory();
 }
 
-ui.navBack.onclick = () => {
+safeBind(ui.navBack, 'onclick', () => {
     ui.preview.contentWindow.postMessage({ type: 'CMS_UNDO' }, '*');
-};
-ui.navForward.onclick = () => {
+});
+safeBind(ui.navForward, 'onclick', () => {
     ui.preview.contentWindow.postMessage({ type: 'CMS_REDO' }, '*');
-};
+});
+
 
 // Initial state
 ui.navBack.classList.add('disabled');
 ui.navForward.classList.add('disabled');
 
 
-ui.saveBtn.onclick = async () => {
-     if (!cmsService) return;
+safeBind(ui.saveBtn, 'onclick', async () => {
+     console.log('[CMS] Publish button clicked!');
+     if (!cmsService) {
+         console.error('[CMS] cmsService is not initialized!');
+         alert('CMS Engine not initialized. Please try reloading the project.');
+         return;
+     }
      ui.saveBtn.disabled = true;
      const oldHTML = ui.saveBtn.innerHTML;
      ui.saveBtn.innerHTML = 'Publishing...';
      try {
-        // STEP 1: Sync & Commit & Push (Source is updated in real-time now)
-        showToast('Syncing to GitHub...', 'info');
+        const overlay = document.getElementById('publishOverlay');
+        const iconBox = document.getElementById('publishIconBox');
+        const spinner = document.getElementById('publishSpinner');
+        const check = document.getElementById('publishCheck');
+        const pText = document.getElementById('publishText');
+        const pSub = document.getElementById('publishSubtext');
+
+        if (overlay) {
+            iconBox.className = 'publish-icon-box loading';
+            spinner.style.display = 'block';
+            check.style.display = 'none';
+            pText.textContent = 'Publishing changes...';
+            pSub.textContent = 'Syncing your edits securely to GitHub';
+            overlay.classList.add('active');
+        } else {
+            showToast('Syncing to GitHub...', 'info');
+        }
+
         const result = await cmsService.publishChanges(`Visual update: ${new Date().toLocaleString()}`);
 
         if (result && result.message === 'No changes') {
+            if (overlay) overlay.classList.remove('active');
             showToast('No changes detected since last publish.', 'info');
         } else {
             // STEP 2: Clear local draft in the editor
             ui.preview.contentWindow.postMessage({ type: 'CMS_PURGE' }, '*');
             
-            // Reset parents own variables for instant UI update
+            // Reset variables for instant UI update
             changes = {};
-            // entries = []; // handled by CMS_PURGE if needed
             ui.saveBtn.style.display = 'none';
             ui.statusLabel.textContent = '0 Unsaved Changes';
             ui.statusLabel.style.color = 'var(--text-muted)';
-            ui.counter.textContent = 'Changes published';
             
-            showToast('Changes published successfully!', 'success');
+            if (overlay) {
+                iconBox.className = 'publish-icon-box success';
+                spinner.style.display = 'none';
+                check.style.display = 'block';
+                pText.textContent = 'Published to GitHub!';
+                pSub.textContent = 'Your website is now building.';
+                
+                setTimeout(() => {
+                    if (overlay) overlay.classList.remove('active');
+                }, 1800);
+            } else {
+                showToast('Changes published successfully!', 'success');
+            }
         }
      } catch (e) { 
+         const overlay = document.getElementById('publishOverlay');
+         if (overlay) overlay.classList.remove('active');
          console.error('[CMS] Publish failed:', e);
          alert(`Publish failed: ${e.message}`); // Use alert for prominence on error
          showToast(`Publish failed: ${e.message}`, 'error'); 
@@ -821,7 +864,7 @@ ui.saveBtn.onclick = async () => {
          ui.saveBtn.disabled = false;
          ui.saveBtn.innerHTML = oldHTML;
      }
-};
+});
 
 window.addEventListener('beforeunload', (e) => {
     if (Object.keys(changes).length > 0) {
