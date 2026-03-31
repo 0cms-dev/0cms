@@ -52,6 +52,7 @@ const ui = {
     accountDropdown: document.getElementById('accountDropdown'),
     repoSearchInput: document.getElementById('repoSearchInput'),
     ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
+    navDemoBtn: document.getElementById('landingDemoBtn'), // Added this
     prewarmLoader: document.getElementById('prewarmLoader')
 };
 
@@ -76,6 +77,7 @@ let currentRepos = [];
 let installations = [];
 let selectedInstallationId = null;
 let currentInstallationToken = null;
+let isDemoMode = false;
 
 function getActiveToken() {
     if (currentInstallationToken) return currentInstallationToken;
@@ -140,6 +142,16 @@ window.openDashboard = async () => {
     }
 
     ui.dashboard.style.display = 'flex';
+    // Slight delay to ensure display:flex is painted before adding .active for transition
+    requestAnimationFrame(() => {
+        ui.dashboard.classList.add('active');
+    });
+    
+    // Safety: ensure demo mode is cleared if we are opening a real project
+    if (settings.repo && settings.token && isDemoMode) {
+        isDemoMode = false;
+        document.documentElement.classList.remove('demo-mode');
+    }
     if (settings.repo && settings.token) {
         if (ui.stepLogin) ui.stepLogin.classList.add('hidden');
         if (ui.stepPicker) ui.stepPicker.classList.add('hidden');
@@ -151,22 +163,35 @@ window.openDashboard = async () => {
     }
 };
 
+window.startDemoMode = async () => {
+    isDemoMode = true;
+    document.documentElement.classList.add('demo-mode');
+    if (!ui.dashboard) return;
+    ui.dashboard.style.display = 'flex';
+    requestAnimationFrame(() => {
+        ui.dashboard.classList.add('active');
+    });
+    if (ui.stepLogin) ui.stepLogin.classList.add('hidden');
+    if (ui.stepPicker) ui.stepPicker.classList.add('hidden');
+    await startCmsEngine('Demo: 0CMS Landing Page', null, true);
+};
+
 
 
 safeBind(ui.btnToggleLanding, 'onclick', window.openDashboard);
+safeBind(ui.navDemoBtn, 'onclick', () => window.startDemoMode());
 
 safeBind(ui.btnClose, 'onclick', () => {
-    const hasChanges = Object.keys(changes).length > 0;
-    if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to exit and discard them?')) {
-        return;
-    }
-
-    ui.dashboard.classList.add('closing');
-    localStorage.removeItem('zcms-dashboard-open');
+    ui.dashboard.classList.remove('active');
     setTimeout(() => {
         ui.dashboard.style.display = 'none';
-        ui.dashboard.classList.remove('closing');
-    }, 400);
+        document.documentElement.classList.remove('demo-mode');
+        document.documentElement.classList.remove('demo-mode-child');
+        const mark = document.getElementById('demoCoachMark');
+        if (mark) mark.style.display = 'none';
+        isDemoMode = false;
+        cmsActive = false;
+    }, 500);
 });
 
 safeBind(ui.loginBtn, 'onclick', () => window.location.href = '/github/login');
@@ -299,11 +324,31 @@ safeBind(ui.viewMobile, 'onclick', () => updateViewport('mobile'));
 
 
 // CMS Initialization Logic
-async function startCmsEngine(repo, token) {
-    if (cmsActive) return;
+async function startCmsEngine(repo, token, demo = false) {
+    if (cmsActive && !demo) return;
     cmsActive = true;
+    isDemoMode = !!demo;
     
     ui.repoDisplay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${repo}`;
+    
+    const demoBadge = document.getElementById('demoBadge');
+    if (demoBadge) demoBadge.style.display = isDemoMode ? 'inline-block' : 'none';
+
+    if (isDemoMode) {
+        ui.preview.src = window.location.origin + '/?demo=true';
+        ui.statusLabel.textContent = 'Demo Mode Active';
+        ui.statusDot.className = 'status-dot on';
+        ui.previewLoader.classList.add('hidden');
+        
+        ui.preview.onload = () => {
+            ui.preview.contentWindow.postMessage({ 
+                type: 'CMS_CONFIG', 
+                proxyUrl: `${window.location.origin}/proxy?url=`
+            }, '*');
+            ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
+        };
+        return;
+    }
     
     if (!preWarmingService) {
         preWarmingService = new WebContainerGitService();
@@ -390,7 +435,7 @@ async function refreshLandingUI() {
     settings = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
     
     if (settings.token) {
-
+        document.documentElement.classList.add('authenticated');
         // User is connected! UI should reflect this "forever"
         // Fetch all account installations in background
         await fetchInstallations();
@@ -405,7 +450,6 @@ async function refreshLandingUI() {
     } else {
         // Fresh start - show connect action
         document.documentElement.classList.remove('authenticated');
-        if (ui.landingLoginBtn) ui.landingLoginBtn.classList.remove('hidden');
         if (ui.landingProject) ui.landingProject.classList.add('hidden');
         if (ui.landingRepoSection) ui.landingRepoSection.classList.add('hidden');
     }
@@ -653,6 +697,12 @@ function selectRepo(name) {
     settings.repo = name;
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
     ui.stepPicker.classList.add('hidden');
+    
+    // Clear Demo state when selecting a real project
+    isDemoMode = false;
+    document.documentElement.classList.remove('demo-mode');
+    document.documentElement.classList.remove('demo-mode-child');
+    
     refreshLandingUI();
     // Start the engine
     startCmsEngine(name, getActiveToken());
@@ -692,6 +742,18 @@ window.onmessage = (e) => {
         // Update dynamic status
         ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
         ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+
+        // DEMO COACH MARK: Show a visual hint for the diff feature on first edit
+        if (isDemoMode && count > 0 && !window._zcmsCoachMarkShown) {
+            const mark = document.getElementById('demoCoachMark');
+            if (mark) {
+                mark.style.display = 'block';
+                window._zcmsCoachMarkShown = true;
+                // Auto-hide after 8 seconds or when clicking the chip
+                setTimeout(() => mark.style.opacity = '0', 8000);
+                setTimeout(() => mark.style.display = 'none', 8500);
+            }
+        }
 
         // REAL-TIME SYNC: Apply the last change to the WebContainer FS
         if (entries.length > 0 && cmsService) {
@@ -797,6 +859,35 @@ ui.navForward.classList.add('disabled');
 
 
 safeBind(ui.saveBtn, 'onclick', async () => {
+     if (isDemoMode) {
+         const overlay = document.getElementById('publishOverlay');
+         const iconBox = document.getElementById('publishIconBox');
+         const spinner = document.getElementById('publishSpinner');
+         const check = document.getElementById('publishCheck');
+         const text = document.getElementById('publishText');
+         const subtext = document.getElementById('publishSubtext');
+
+         overlay.classList.add('active');
+         iconBox.className = 'publish-icon-box loading';
+         spinner.style.display = 'block';
+         check.style.display = 'none';
+         text.textContent = 'Simulating publish...';
+         subtext.textContent = 'Demo Mode: Sandbox environment';
+
+         setTimeout(() => {
+             iconBox.className = 'publish-icon-box success';
+             spinner.style.display = 'none';
+             check.style.display = 'block';
+             text.textContent = 'Success! (Demo)';
+             subtext.textContent = 'Connect GitHub to publish for real.';
+             
+             setTimeout(() => {
+                 overlay.classList.remove('active');
+                 showToast('Demo changes saved to local memory!', 'success');
+             }, 2500);
+         }, 1500);
+         return;
+     }
      console.log('[CMS] Publish button clicked!');
      if (!cmsService) {
          console.error('[CMS] cmsService is not initialized!');

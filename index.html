@@ -7,16 +7,16 @@
     <meta name="description" content="Zero Config. Zero Friction. The fastest way to edit your Jamstack site.">
     
     <!-- Favicon & Icons -->
-    <link rel="icon" href="/logo.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/logo.svg">
-    <link rel="mask-icon" href="/logo.svg" color="#7c3aed">
+    <link rel="icon" href="/logo.svg?v=2" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/logo.svg?v=2">
+    <link rel="mask-icon" href="/logo.svg?v=2" color="#7c3aed">
     <meta name="theme-color" content="#7c3aed">
     
     <!-- Open Graph / Meta Thumbnails -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="0cms Dashboard">
     <meta property="og:description" content="Zero Config. Zero Friction. The fastest way to edit your Jamstack site.">
-    <meta property="og:image" content="https://0cms.dev/logo.svg">
+    <meta property="og:image" content="https://0cms.dev/logo.svg?v=2">
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
@@ -52,6 +52,12 @@
             // 2. APPLY STATE CLASS
             const s = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
             if (s.token) document.documentElement.classList.add('authenticated');
+
+            // 3. DEMO MODE DETECTION
+            if (u.get('demo') === 'true' || (window.self !== window.top && !window.location.search.includes('token='))) {
+                document.documentElement.classList.add('demo-mode');
+                document.documentElement.classList.add('demo-mode-child'); // Differentiate iframe
+            }
         } catch(e) {}
     </script>
 
@@ -100,17 +106,123 @@
         }
 
         .hidden { display: none !important; }
+        .demo-mode #cmsDashboard { display: none !important; }
+        .demo-mode:not(.demo-mode-child) #cmsDashboard { display: flex !important; } /* Main dashboard stays visible */
 
-        #cmsDashboard {
+        /* In the demo iframe: hide irrelevant chrome so the page looks clean */
+        .demo-mode-child header,
+        .demo-mode-child footer { display: none !important; }
+        .demo-mode-child main { padding-top: 2rem !important; }
+
+        .demo-mode .cms-demo-shell-badge { display: block; }
+        
+        .cms-demo-shell-badge {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+            text-transform: uppercase;
+            z-index: 10006;
+            pointer-events: none;
+        }
+        .demo-mode .cms-demo-shell-badge { display: block; }
+
+        /* AUTHENTICATED STATE */
+        .authenticated #landingLoginBtn,
+        .authenticated #landingDemoBtn { display: none !important; }
+        .authenticated #heroAuthAction { gap: 0; }
+        .authenticated #cmsLandingProject { display: flex !important; }
+        
+        .demo-welcome-card {
+            display: none;
+            position: fixed;
+            top: 100px;
+            right: 40px;
+            width: 300px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            z-index: 10005;
+            animation: demoSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes demoSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        .demo-mode #demoWelcomeCard { display: block; }
+        
+        .demo-welcome-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .demo-welcome-icon { font-size: 1.5rem; }
+        .demo-welcome-card h3 { font-size: 0.95rem; margin: 0; font-family: 'Outfit', sans-serif; }
+        .demo-welcome-card p { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
+        .demo-step { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; margin-bottom: 8px; font-weight: 600; }
+        .demo-step span { width: 16px; height: 16px; background: var(--bg-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: var(--primary); }
+        .demo-welcome-card button { 
+            width: 100%; padding: 10px; border-radius: 10px; border: none; background: var(--primary); color: white; 
+            font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: 0.2s;
+        }
+        .demo-welcome-card button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
+
+        /* Coach Mark (Visual Pointer) */
+        .demo-coach-mark {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 20px);
+            left: 20px;
+            z-index: 10008;
+            background: var(--primary);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.5);
+            animation: coachFloat 2s ease-in-out infinite;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .demo-coach-mark::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 24px;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 7px solid var(--primary);
+        }
+        @keyframes coachFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-8px) scale(1.03); }
+        }
+
+        #cmsDashboard {
+            display: none; /* Stay none until active to avoid layout issues */
+            position: fixed;
+            inset: 0;
             z-index: 9999;
             background: rgba(255, 255, 255, 0.4);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
             align-items: center;
             justify-content: center;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+        #cmsDashboard.active {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: all;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -143,18 +255,7 @@
         .logo:hover { transform: translateY(-1px); }
         .hidden { display: none !important; }
 
-        #cmsDashboard {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 9999;
-            background: rgba(255, 255, 255, 0.4);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.3s ease;
-        }
+        /* Dashboard state will now be handled by .active class above */
 
         @media (prefers-color-scheme: dark) {
             #cmsDashboard { background: rgba(10, 10, 10, 0.4); }
@@ -624,7 +725,7 @@
         .publish-overlay.active .publish-subtext { transform: translateY(0); opacity: 1; }
 
         .publish-icon-box.loading svg { animation: spin 1.5s linear infinite; stroke: var(--text-muted); }
-        .publish-icon-box.success { background: var(--primary); color: white; }
+        .publish-icon-box.success { background: #10b981; color: white; border-color: #059669; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
         .publish-icon-box.success svg { stroke: white; }
 
         @keyframes checkmark-grow {
@@ -657,6 +758,8 @@
             padding: 14px 28px; border-radius: 16px; border: 1px solid var(--border); 
             box-shadow: 0 4px 12px rgba(0,0,0,0.03); font-weight: 600; color: var(--text);
             transition: 0.2s; font-size: 0.95rem; z-index: 2; position: relative;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         .json-card-pill:hover {
             transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 8px 20px rgba(124, 58, 237, 0.1);
@@ -763,7 +866,7 @@
     </style>
 </head>
 <body>
-    <header>
+    <header style="position:relative;">
         <div class="logo">
             <div class="logo-box">
                 <svg viewBox="0 0 76 76" fill="none">
@@ -773,6 +876,7 @@
                 </svg>
             </div>
         </div>
+        
         <nav>
             <ul>
                 <li><a href="https://github.com/megawron/0cms-core" target="_blank" style="display:flex; align-items:center; gap:8px;">
@@ -803,6 +907,11 @@
                 <button class="hero-cta hero-cta-primary" id="landingLoginBtn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
                     Connect with GitHub
+                </button>
+
+                <button class="hero-cta btn-cms-outline" id="landingDemoBtn" style="border: 2px solid var(--border); padding: 14px 32px; height: auto;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Try Live Demo
                 </button>
 
                 <div id="cmsLandingProject" class="project-card" style="margin: 0 auto; text-align: left;">
@@ -890,24 +999,24 @@
                         Say goodbye to complex configuration files and rigid schemas. ZeroCMS intelligently infers your content framework directly from your active code. Simply connect your repository, and it builds a dynamic visual editor instantly.
                     </p>
                     <div style="display: flex; justify-content: center; gap: 24px; align-items: center; flex-wrap: wrap;">
-                        <span class="json-card-pill">
+                        <div class="json-card-pill">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
                             Zero Config
-                        </span>
-                        <span class="json-card-pill">
+                        </div>
+                        <div class="json-card-pill">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
                             No Database
-                        </span>
-                        <span class="json-card-pill">
+                        </div>
+                        <div class="json-card-pill">
                             <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </div>
                             Bring Your Own Framework
-                        </span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -931,6 +1040,7 @@
 
     <!-- QUANTUM DASHBOARD OVERLAY -->
     <div id="cmsDashboard">
+        <div class="cms-demo-shell-badge">Live Demo Mode</div>
         <div class="dashboard-main">
             <div id="previewLoader" class="preview-loader">
                 <div class="loader-spinner"></div>
@@ -938,10 +1048,14 @@
             </div>
             
             <div class="hud-container">
+                <div id="demoCoachMark" class="demo-coach-mark">
+                    See your changes here! 💡
+                </div>
                 <div class="command-pill">
                     <div class="url-chip">
                         <span id="cmsStatusDot" class="status-dot off"></span>
                         <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>
+                        <div id="demoBadge" style="display:none; margin-left:8px; padding:2px 6px; background:var(--primary); color:white; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:0.05em;">DEMO</div>
                     </div>
                     
                     <div class="dock-divider"></div>
@@ -1005,7 +1119,21 @@
                 
 
 
-                <!-- FLOATING CREATE PANEL -->
+                <div id="demoWelcomeCard" class="demo-welcome-card">
+        <div class="demo-welcome-header">
+            <div class="demo-welcome-icon">✨</div>
+            <h3>Welcome to 0CMS Demo</h3>
+        </div>
+        <p>Experience the power of zero-friction editing. <strong>Everything you see is editable.</strong></p>
+        <div class="demo-welcome-steps">
+            <div class="demo-step"><span>1</span> Click any text to edit it</div>
+            <div class="demo-step"><span>2</span> Click images to swap them</div>
+            <div class="demo-step"><span>3</span> Hit "Publish" to see the Git flow</div>
+        </div>
+        <button style="margin-top: 16px;" onclick="document.getElementById('demoWelcomeCard').style.display='none'">Got it, let's edit!</button>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
                 <div id="cmsCreatePanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
                     <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
                         <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg> Create Content</span>

@@ -148,6 +148,14 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // Skip proxying for data URLs or other protocols that https.get doesn't support
+    if (url.startsWith('data:') || !url.startsWith('http')) {
+      console.log(`[Proxy Skip] Unsupported protocol: ${url.substring(0, 50)}...`);
+      res.writeHead(400);
+      res.end(`Protocol not supported by proxy: ${url.split(':')[0]}`);
+      return;
+    }
+
     const proxyReq = https.get(url, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, {
         'Content-Type': proxyRes.headers['content-type'],

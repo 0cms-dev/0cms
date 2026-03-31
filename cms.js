@@ -592,6 +592,7 @@ class ZeroConfigCMS {
 
   makeBlockActionable(block) {
     if (block.classList.contains('cms-block')) return;
+    if (block.classList.contains('json-card-pill')) return; // Don't blockify small pills
     block.classList.add('cms-block');
     const menu = document.createElement('div');
     menu.className = 'cms-block-menu cms-ui';
