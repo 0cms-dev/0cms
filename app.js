@@ -1,5 +1,13 @@
 import { WebContainerGitService } from './WebContainerGitService.js';
+import { WasmBridge } from './lib/runtime/WasmBridge.js';
 import cms from './cms.js'; // The visual editor bridge
+
+// --- RUNTIME: Register Service Worker for WASM Previews ---
+if ('serviceWorker' in navigator && isHostApp) {
+    navigator.serviceWorker.register('/runtime-sw.js', { scope: '/' })
+        .then(reg => console.log('[0CMS] Runtime Service Worker registered:', reg.scope))
+        .catch(err => console.warn('[0CMS] Runtime SW registration failed:', err));
+}
 
 // --- IFRAME GUARD: Fix Flickering & Prevent Recursive Init ---
 const isHostApp = window.self === window.top;
@@ -475,7 +483,12 @@ window.addEventListener('message', (e) => {
                     lastEntry.original, 
                     lastEntry.updated, 
                     lastEntry.sourceFile || null
-                 ).catch(err => console.error('[CMS] Autosync failed:', err));
+                 ).then(async (result) => {
+                    // SYNC TO WASM RUNTIME: Ensure PHP/Python preview sees the change
+                    if (result && result.path && result.content) {
+                        WasmBridge.getInstance().syncFile(result.path, result.content);
+                    }
+                 }).catch(err => console.error('[CMS] Autosync failed:', err));
             }
         }
         
@@ -627,6 +640,11 @@ async function startCmsEngine(repo, token, demo = false) {
         ui.statusLabel.textContent = cmsService.serverUrl;
         ui.statusDot.className = 'status-dot';
         
+        // ACTIVATE RUNTIME BRIDGE: Ensure PHP/Python/Rust preview is ready
+        if (cmsService.activeDriver) {
+            WasmBridge.getInstance().activate(cmsService.activeDriver.id);
+        }
+
         cmsService.scanCollections().then(cols => {
             if (cols.length > 0) ui.navNewPage.style.display = 'flex';
         });
@@ -654,12 +672,22 @@ async function startCmsEngine(repo, token, demo = false) {
 
         try {
             await cmsService.boot(cmsService.repoUrl, localStorage.getItem('zcms-manual-command'));
+            
+            // ACTIVATE RUNTIME BRIDGE after boot
+            if (cmsService.activeDriver) {
+                WasmBridge.getInstance().activate(cmsService.activeDriver.id);
+            }
         } finally {
             clearTimeout(bootWatchdog);
         }
     } else if (cmsService.serverUrl) {
         ui.preview.src = cmsService.serverUrl;
         ui.siteUrl.textContent = 'Live Preview Active';
+
+        // ACTIVATE RUNTIME BRIDGE
+        if (cmsService.activeDriver) {
+            WasmBridge.getInstance().activate(cmsService.activeDriver.id);
+        }
     }
 }
 

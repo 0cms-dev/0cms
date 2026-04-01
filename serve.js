@@ -49,7 +49,8 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpg',
   '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
+  '.svg': 'image/xml+svg',
+  '.wasm': 'application/wasm',
 };
 
 const server = http.createServer((req, res) => {

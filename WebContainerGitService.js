@@ -262,8 +262,11 @@ export class WebContainerGitService {
       if (this.activeDriver) {
           this.onLog(`[Auto-Detect] Matched Driver: ${this.activeDriver.name}`);
           
+          // NEW: ACTIVATE SUPER TAGGER (WASM)
+          await this.tagger.initWasm().catch(() => {});
+
           // NEW: DETERMINISTIC INSTRUMENTATION (BATCHED)
-          this.onLog('[Instrumentation] Injecting invisible Unicode breadcrumbs (Batched Mode)...');
+          this.onLog(`[Instrumentation] Injecting invisible Unicode breadcrumbs (Batch: ${this.tagger.activeEngine.constructor.name})...`);
           
           const contentFiles = [];
           for (const dir of this.activeDriver.routing.contentPaths) {
@@ -602,8 +605,9 @@ export class WebContainerGitService {
                     return updatedCount;
                 };
                 if (updateValue(data) > 0) {
-                    await writeAndTrack(sourceFile, JSON.stringify(data, null, 2));
-                    return true;
+                    const newContent = JSON.stringify(data, null, 2);
+                    await writeAndTrack(sourceFile, newContent);
+                    return { path: sourceFile, content: newContent };
                 }
             } catch (e) {
                 this.onLog(`[Warning] Failed to parse JSON ${sourceFile}: ${e.message}`);
@@ -626,7 +630,7 @@ export class WebContainerGitService {
                 // Fallback: direct replacement of matched segment in file
                 content = content.split(matchStr).join(updated);
                 await writeAndTrack(sourceFile, content);
-                return true;
+                return { path: sourceFile, content: content };
             }
         }
 
@@ -635,7 +639,7 @@ export class WebContainerGitService {
         if (matchStr) {
           content = content.split(matchStr).join(updated);
           await writeAndTrack(sourceFile, content);
-          return true;
+          return { path: sourceFile, content: content };
         }
       } catch (e) {
         this.onLog(`[Warning] Could not read source file ${sourceFile}: ${e.message}`);
@@ -686,7 +690,7 @@ export class WebContainerGitService {
                 }
                 content = content.split(matchStr).join(updated);
                 await writeAndTrack(fullPath, content);
-                return true;
+                return { path: fullPath, content: content };
               }
             } catch (e) {}
           }
