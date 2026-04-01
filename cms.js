@@ -225,9 +225,11 @@ class ZeroConfigCMS {
       }
       
       .cms-editable.cms-edited:hover:not(:focus) {
-        outline-color: rgba(  0.9) !important;
-        background-color: rgba(124, 58, 237, 0.05);
+        outline: 2px dashed #a855f7 !important;
+        outline-offset: 6px !important;
+        background-color: rgba(168, 85, 247, 0.08) !important;
         animation: cmsDraftPulse 2s infinite ease-in-out !important;
+        position: relative; z-index: 9999;
       }
       
       .cms-editable:focus { 

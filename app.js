@@ -45,6 +45,12 @@ const ui = {
     viewTablet: document.getElementById('viewTablet'),
     viewMobile: document.getElementById('viewMobile'),
     
+    // NEW DOCK ELEMENTS
+    modeToggle: document.getElementById('cmsModeToggle'),
+    modeLabel: document.getElementById('cmsModeLabel'),
+    modeIcon: document.getElementById('cmsModeIcon'),
+    historyBtnCount: document.getElementById('cmsHistoryBtnCount'),
+    
     // NEW REPO PICKER CONTROLS
     accountSwitcherBtn: document.getElementById('accountSwitcherBtn'),
     selectedAccountAvatar: document.getElementById('selectedAccountAvatar'),
@@ -142,6 +148,33 @@ window.openDashboard = async () => {
     }
 
     ui.dashboard.style.display = 'flex';
+
+    // UI Refs for new elements
+    if (ui.modeToggle) {
+        ui.modeToggle.onclick = () => {
+            const isText = ui.modeLabel.textContent.includes('Text');
+            const newMode = isText ? 'layout' : 'text';
+            
+            ui.modeLabel.textContent = newMode === 'text' ? 'Text Mode' : 'Layout Mode';
+            ui.modeToggle.classList.toggle('active', newMode === 'text');
+            
+            // Switch Icon
+            ui.modeIcon.innerHTML = newMode === 'text' 
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>';
+            
+            ui.preview.contentWindow.postMessage({ type: 'CMS_MODE', mode: newMode }, '*');
+        };
+    }
+
+    // Check for demo mode and set layout
+    if (isDemoMode) {
+        ui.dashboard.classList.add('demo-active');
+        ui.dashboard.classList.remove('drawer-left-open');
+    } else {
+        ui.dashboard.classList.add('drawer-left-open');
+    }
+
     // Slight delay to ensure display:flex is painted before adding .active for transition
     requestAnimationFrame(() => {
         ui.dashboard.classList.add('active');
@@ -742,6 +775,11 @@ window.onmessage = (e) => {
         // Update dynamic status
         ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
         ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        
+        if (ui.historyBtnCount) {
+            ui.historyBtnCount.textContent = count;
+            ui.historyBtnCount.parentElement.style.display = count > 0 ? 'flex' : 'none';
+        }
 
         // DEMO COACH MARK: Show a visual hint for the diff feature on first edit
         if (isDemoMode && count > 0 && !window._zcmsCoachMarkShown) {

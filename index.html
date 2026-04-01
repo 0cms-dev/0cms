@@ -109,10 +109,9 @@
         .demo-mode #cmsDashboard { display: none !important; }
         .demo-mode:not(.demo-mode-child) #cmsDashboard { display: flex !important; } /* Main dashboard stays visible */
 
-        /* In the demo iframe: hide irrelevant chrome so the page looks clean */
-        .demo-mode-child header,
+        /* In the demo iframe: hide footer but show header for branding */
         .demo-mode-child footer { display: none !important; }
-        .demo-mode-child main { padding-top: 2rem !important; }
+        .demo-mode-child main { padding-top: 1rem !important; }
 
         .demo-mode .cms-demo-shell-badge { display: block; }
         
@@ -223,6 +222,10 @@
             opacity: 1;
             transform: translateY(0);
             pointer-events: all;
+        }
+        #cmsDashboard.demo-active {
+            top: 72px;
+            z-index: 99;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -1075,14 +1078,11 @@
                     
                     <div class="dock-divider"></div>
 
-                    <button class="dock-item" id="navHistory" title="View Unsaved Changes">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Changes
-                    </button>
-
-                    <button class="dock-item" id="navNewPage" title="Create New Content" style="display:none;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        New
+                    <div class="dock-divider"></div>
+                    
+                    <button class="dock-item" onclick="toggleHistory(true)" style="gap:6px">
+                        <span id="cmsHistoryBtnCount" style="background:var(--primary); color:white; padding:2px 6px; border-radius:100px; font-size:0.7rem; font-weight:800;">0</span>
+                        <span>unsaved</span>
                     </button>
 
                     <button class="dock-item" id="navSEO" title="Manage SEO Settings">
