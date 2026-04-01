@@ -1,6 +1,9 @@
 import { WebContainerGitService } from './WebContainerGitService.js';
 import { WasmBridge } from './lib/runtime/WasmBridge.js';
+import { IframeSyncService } from './lib/services/IframeSyncService.js';
 import cms from './cms.js'; // The visual editor bridge
+
+const isHostApp = window.self === window.top;
 
 // --- RUNTIME: Register Service Worker for WASM Previews ---
 if ('serviceWorker' in navigator && isHostApp) {
@@ -10,7 +13,6 @@ if ('serviceWorker' in navigator && isHostApp) {
 }
 
 // --- IFRAME GUARD: Fix Flickering & Prevent Recursive Init ---
-const isHostApp = window.self === window.top;
 if (!isHostApp) {
     console.log('[0CMS] Running in preview mode (iframe). Dashboard UI suppressed.');
 }
@@ -313,6 +315,8 @@ window.openDashboard = async () => {
 };
 
 window.startDemoMode = async () => {
+    // Alias for the old 'startDemo' name used in inline HTML handlers
+    window.startDemo = window.startDemoMode;
     isDemoMode = true;
     document.documentElement.classList.add('demo-mode');
     if (!ui.dashboard) return;
@@ -487,6 +491,10 @@ window.addEventListener('message', (e) => {
                     // SYNC TO WASM RUNTIME: Ensure PHP/Python preview sees the change
                     if (result && result.path && result.content) {
                         WasmBridge.getInstance().syncFile(result.path, result.content);
+                        
+                        // NEW: FLICKER-FREE HMR (SUPER-MORPH)
+                        const currentUrl = ui.preview.src;
+                        IframeSyncService.getInstance().sync(ui.preview, currentUrl, result.markerId);
                     }
                  }).catch(err => console.error('[CMS] Autosync failed:', err));
             }

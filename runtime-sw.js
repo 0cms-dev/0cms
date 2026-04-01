@@ -41,9 +41,14 @@ async function handleRuntimeRequest(event) {
         resolve(new Response(msg.data.error, { status: 500 }));
       } else {
         // Construct the response from the WASM engine output
+        const headers = new Headers(msg.data.headers || {});
+        if (!headers.has('Content-Type')) {
+            headers.set('Content-Type', 'text/html');
+        }
+
         resolve(new Response(msg.data.body, {
           status: msg.data.status || 200,
-          headers: msg.data.headers || { 'Content-Type': 'text/html' }
+          headers: headers
         }));
       }
     };
