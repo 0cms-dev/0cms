@@ -1,7 +1,13 @@
 import { WebContainerGitService } from './WebContainerGitService.js';
 import cms from './cms.js'; // The visual editor bridge
 
-const ui = {
+// --- IFRAME GUARD: Fix Flickering & Prevent Recursive Init ---
+const isHostApp = window.self === window.top;
+if (!isHostApp) {
+    console.log('[0CMS] Running in preview mode (iframe). Dashboard UI suppressed.');
+}
+
+const ui = isHostApp ? {
     dashboard: document.getElementById('cmsDashboard'),
     landingProject: document.getElementById('cmsLandingProject'),
     landingRepoName: document.getElementById('landingRepoName'),
@@ -49,7 +55,7 @@ const ui = {
     modeToggle: document.getElementById('cmsModeToggle'),
     modeLabel: document.getElementById('cmsModeLabel'),
     modeIcon: document.getElementById('cmsModeIcon'),
-    historyBtnCount: document.getElementById('cmsHistoryBtnCount'),
+    // removed historyBtnCount (redundant)
     
     // NEW REPO PICKER CONTROLS
     accountSwitcherBtn: document.getElementById('accountSwitcherBtn'),
@@ -59,8 +65,13 @@ const ui = {
     repoSearchInput: document.getElementById('repoSearchInput'),
     ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
     navDemoBtn: document.getElementById('landingDemoBtn'), // Added this
-    prewarmLoader: document.getElementById('prewarmLoader')
-};
+    prewarmLoader: document.getElementById('prewarmLoader'),
+    toast: document.getElementById('cmsToast')
+} : {};
+
+
+if (isHostApp) {
+
 
 // Helper to safely bind events without crashing if element is missing
 const safeBind = (el, event, handler) => {
@@ -83,7 +94,8 @@ let currentRepos = [];
 let installations = [];
 let selectedInstallationId = null;
 let currentInstallationToken = null;
-let isDemoMode = false;
+const urlParams = new URLSearchParams(window.location.search);
+let isDemoMode = urlParams.get('demo') === 'true';
 
 function getActiveToken() {
     if (currentInstallationToken) return currentInstallationToken;
@@ -113,12 +125,14 @@ document.addEventListener('click', (e) => {
 });
 
 // Unconditionally refresh UI state on load to ensure persistence
-refreshLandingUI();
+if (isHostApp) {
+    refreshLandingUI();
+}
 
 
-// 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo
+// 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo (UNLESS in Demo Mode)
 let preWarmingService = null;
-if (settings.repo && settings.token) {
+if (settings.repo && settings.token && !isDemoMode) {
     preWarmingService = new WebContainerGitService();
     preWarmingService.repoUrl = `https://github.com/${settings.repo}`;
     preWarmingService.token = getActiveToken();
@@ -129,6 +143,13 @@ if (settings.repo && settings.token) {
 
 
 // 2. DASHBOARD UI CONTROLS
+// If we started via ?demo=true, boot the demo engine immediately once the UI is ready
+if (isDemoMode && isHostApp) {
+    document.addEventListener('DOMContentLoaded', () => {
+         window.startDemoMode();
+    });
+}
+
 window.openDashboard = async () => {
     if (!ui.dashboard) return;
     
@@ -323,11 +344,93 @@ window.addEventListener('message', (e) => {
         ui.seoDesc.value = e.data.description || '';
         ui.seoImage.value = e.data.image || '';
     }
-    // Existing ones are handled in cms.js globally, but we intercept SEO here
+    
     if (e.data.type === 'CMS_READY') {
         showToast('Visual Editor Ready', 'success');
-        ui.previewLoader.classList.add('hidden');
-        ui.statusDot.className = 'status-dot';
+        if (ui.previewLoader) {
+            ui.previewLoader.style.opacity = '0';
+            setTimeout(() => {
+                ui.previewLoader.style.display = 'none';
+                ui.previewLoader.classList.add('hidden');
+            }, 500);
+        }
+        ui.statusDot.className = 'status-dot on';
+        ui.statusLabel.textContent = '0 Unsaved Changes';
+        ui.statusLabel.style.color = 'var(--text-muted)';
+    }
+
+    if (e.data.type === 'CMS_CHANGED') {
+        changes = e.data.changes;
+        let entries = e.data.entries || [];  // local scoped
+        const count = Object.keys(changes).length;
+        ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+        
+        // Update dynamic status
+        ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
+        ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        
+        // DEMO COACH MARK: Show a visual hint for the diff feature on first edit
+        if (isDemoMode && count > 0 && !window._zcmsCoachMarkShown) {
+            const mark = document.getElementById('demoCoachMark');
+            if (mark) {
+                mark.style.display = 'block';
+                window._zcmsCoachMarkShown = true;
+                setTimeout(() => mark.style.opacity = '0', 8000);
+                setTimeout(() => mark.style.display = 'none', 8500);
+            }
+        }
+
+        // REAL-TIME SYNC: Apply the last change to the WebContainer FS
+        if (entries.length > 0 && cmsService) {
+            const lastEntry = entries[entries.length - 1];
+            if (lastEntry.original && lastEntry.updated && lastEntry.original !== lastEntry.updated) {
+                 cmsService.applySmartMatchChange(
+                    lastEntry.original, 
+                    lastEntry.updated, 
+                    lastEntry.sourceFile || null
+                 ).catch(err => console.error('[CMS] Autosync failed:', err));
+            }
+        }
+        
+        if (e.data.canUndo) ui.navBack.classList.remove('disabled');
+        else ui.navBack.classList.add('disabled');
+        
+        if (e.data.canRedo) ui.navForward.classList.remove('disabled');
+        else ui.navForward.classList.add('disabled');
+        
+        if (ui.historyCount) ui.historyCount.textContent = count;
+        
+        if (ui.historyList) {
+            if (count === 0) {
+                ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
+            } else {
+                ui.historyList.innerHTML = entries.map(entry => {
+                    const oldVal = (entry.original || '').trim();
+                    const newVal = (entry.updated || '').trim();
+                    const displayOld = oldVal.length > 50 ? oldVal.substring(0, 50) + '...' : oldVal;
+                    const displayNew = newVal.length > 50 ? newVal.substring(0, 50) + '...' : newVal;
+
+                    return `
+                    <div class="history-item" onclick="highlightElement('${entry.selector}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span class="history-item-label" style="font-size:0.75rem; opacity:0.6; display:flex; align-items:center; gap:4px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                ${entry.time}
+                            </span>
+                            <button class="btn-undo" onclick="event.stopPropagation(); undoChange('${entry.selector}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 018 8v2M3 10l6-6M3 10l6 6"/></svg>
+                                Revert
+                            </button>
+                        </div>
+                        <div class="history-item-diff">
+                            <div class="diff-old">${displayOld || 'None'}</div>
+                            <div style="font-size:0.6rem; opacity:0.5; margin: -2px 0;">CHANGES TO ➜</div>
+                            <div class="diff-new">${displayNew || 'Empty'}</div>
+                        </div>
+                    </div>
+                `;}).join('');
+            }
+        }
     }
 });
 
@@ -368,18 +471,22 @@ async function startCmsEngine(repo, token, demo = false) {
     if (demoBadge) demoBadge.style.display = isDemoMode ? 'inline-block' : 'none';
 
     if (isDemoMode) {
-        ui.preview.src = window.location.origin + '/?demo=true';
         ui.statusLabel.textContent = 'Demo Mode Active';
         ui.statusDot.className = 'status-dot on';
         ui.previewLoader.classList.add('hidden');
         
-        ui.preview.onload = () => {
-            ui.preview.contentWindow.postMessage({ 
-                type: 'CMS_CONFIG', 
-                proxyUrl: `${window.location.origin}/proxy?url=`
-            }, '*');
-            ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
-        };
+        // STABILITY DELAY: Wait 300ms before hitting the same origin again for the iframe.
+        // This prevents 'Connection Refused' during heavy cold-boots (cache clear).
+        setTimeout(() => {
+            ui.preview.src = window.location.origin + '/?demo=true';
+            ui.preview.onload = () => {
+                ui.preview.contentWindow.postMessage({ 
+                    type: 'CMS_CONFIG', 
+                    proxyUrl: `${window.location.origin}/proxy?url=`
+                }, '*');
+                ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
+            };
+        }, 300);
         return;
     }
     
@@ -400,6 +507,13 @@ async function startCmsEngine(repo, token, demo = false) {
     };
 
     cmsService.onServerReady = (url) => {
+        // HIJACK PROTECTION: If the user is in Demo Mode, do NOT overwrite the preview URL
+        // with the background engine's real project URL.
+        if (isDemoMode) {
+            console.log('[CMS] Background engine ready, but suppressing UI update because Demo Mode is active.');
+            return;
+        }
+
         ui.preview.src = url;
         ui.statusLabel.textContent = 'Website Ready';
         ui.statusDot.className = 'status-dot';
@@ -582,10 +696,10 @@ async function fetchInstallations() {
         };
         ui.accountDropdown.appendChild(manageItem);
 
-        // Auto-select logic moved to only if success
+        // Auto-select logic moved to only if success (AND NOT in Demo Mode)
         if (installations && installations.length > 0) {
             const initial = installations.find(i => i.id == settings.installation_id) || installations[0];
-            if (initial) selectInstallation(initial);
+            if (initial && !isDemoMode) selectInstallation(initial);
         } else if (!settings.token) {
              ui.selectedAccountName.textContent = "Connect GitHub";
         }
@@ -593,6 +707,8 @@ async function fetchInstallations() {
 }
 
 async function selectInstallation(inst) {
+    if (isDemoMode) return; // Safety: never auto-hijack if demo is active
+
     selectedInstallationId = inst.id;
     settings.installation_id = inst.id;
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
@@ -628,8 +744,8 @@ async function selectInstallation(inst) {
     fetchRepos(inst.id);
 }
 
-// Global repo search listener
-ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
+// Global repo search listener (REDUNDANT: already bound with safeBind at top)
+// ui.repoSearchInput.oninput = (e) => renderRepos(e.target.value);
 
 async function fetchRepos(installationId = null) {
     if (!settings.token) return;
@@ -660,7 +776,8 @@ async function fetchRepos(installationId = null) {
 
         // AUTO-SELECT RECENT REPOSITORY
         // If the user hasn't selected a repo yet, pre-fill the Hero section with their most recently updated one!
-        if (!settings.repo && currentRepos.length > 0) {
+        // (UNLESS in Demo Mode - we don't want to hijack the demo)
+        if (!settings.repo && currentRepos.length > 0 && !isDemoMode) {
             settings.repo = currentRepos[0].full_name;
             localStorage.setItem('zcms-settings', JSON.stringify(settings));
         }
@@ -752,106 +869,9 @@ function showToast(msg, type) {
     setTimeout(() => ui.toast.classList.remove('show'), 3000);
 }
 
-// Visual Editor Sync
-// Zen Editor: Automatically active
-
-window.onmessage = (e) => {
-    if (e.data.type === 'CMS_READY') {
-        if (ui.previewLoader) {
-            ui.previewLoader.style.opacity = '0';
-            setTimeout(() => ui.previewLoader.style.display = 'none', 500);
-        }
-        ui.statusDot.className = 'status-dot on';
-        ui.statusLabel.textContent = '0 Unsaved Changes';
-        ui.statusLabel.style.color = 'var(--text-muted)';
-    }
-
-    if (e.data.type === 'CMS_CHANGED') {
-        changes = e.data.changes;
-        let entries = e.data.entries || [];  // local scoped
-        const count = Object.keys(changes).length;
-        ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
-        
-        // Update dynamic status
-        ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
-        ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
-        
-        if (ui.historyBtnCount) {
-            ui.historyBtnCount.textContent = count;
-            ui.historyBtnCount.parentElement.style.display = count > 0 ? 'flex' : 'none';
-        }
-
-        // DEMO COACH MARK: Show a visual hint for the diff feature on first edit
-        if (isDemoMode && count > 0 && !window._zcmsCoachMarkShown) {
-            const mark = document.getElementById('demoCoachMark');
-            if (mark) {
-                mark.style.display = 'block';
-                window._zcmsCoachMarkShown = true;
-                // Auto-hide after 8 seconds or when clicking the chip
-                setTimeout(() => mark.style.opacity = '0', 8000);
-                setTimeout(() => mark.style.display = 'none', 8500);
-            }
-        }
-
-        // REAL-TIME SYNC: Apply the last change to the WebContainer FS
-        if (entries.length > 0 && cmsService) {
-            const lastEntry = entries[entries.length - 1];
-            if (lastEntry.original && lastEntry.updated && lastEntry.original !== lastEntry.updated) {
-                 // Non-blocking sync to avoid freezing the UI
-                 cmsService.applySmartMatchChange(
-                    lastEntry.original, 
-                    lastEntry.updated, 
-                    lastEntry.sourceFile || null
-                 ).catch(err => {
-                     console.error('[CMS] Autosync failed:', err);
-                 });
-            }
-        }
-        
-        // Toggle Undo/Redo button states
-        if (e.data.canUndo) ui.navBack.classList.remove('disabled');
-        else ui.navBack.classList.add('disabled');
-        
-        if (e.data.canRedo) ui.navForward.classList.remove('disabled');
-        else ui.navForward.classList.add('disabled');
-        
-        if (ui.historyCount) ui.historyCount.textContent = count;
-        
-        // Update history list
-        if (ui.historyList) {
-            if (count === 0) {
-                ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
-            } else {
-                ui.historyList.innerHTML = entries.map(entry => {
-                    const oldVal = (entry.original || '').trim();
-                    const newVal = (entry.updated || '').trim();
-                    const displayOld = oldVal.length > 50 ? oldVal.substring(0, 50) + '...' : oldVal;
-                    const displayNew = newVal.length > 50 ? newVal.substring(0, 50) + '...' : newVal;
-
-                    return `
-                    <div class="history-item" onclick="highlightElement('${entry.selector}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <span class="history-item-label" style="font-size:0.75rem; opacity:0.6; display:flex; align-items:center; gap:4px;">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                ${entry.time}
-                            </span>
-                            <button class="btn-undo" onclick="event.stopPropagation(); undoChange('${entry.selector}')">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 018 8v2M3 10l6-6M3 10l6 6"/></svg>
-                                Revert
-                            </button>
-                        </div>
-                        <div class="history-item-diff">
-                            <div class="diff-old">${displayOld || 'None'}</div>
-                            <div style="font-size:0.6rem; opacity:0.5; margin: -2px 0;">CHANGES TO ➜</div>
-                            <div class="diff-new">${displayNew || 'Empty'}</div>
-                        </div>
-                    </div>
-                `}).join('');
-            }
-        }
-    }
-
-};
+// Visual Editor Sync (Zen Editor: Automatically active)
+// Redundant window.onmessage removed (merged into addEventListener above)
+;
 
 window.undoChange = (selector) => {
     ui.preview.contentWindow.postMessage({ type: 'CMS_REVERT', selector }, '*');
@@ -995,9 +1015,11 @@ safeBind(ui.saveBtn, 'onclick', async () => {
      }
 });
 
-window.addEventListener('beforeunload', (e) => {
-    if (Object.keys(changes).length > 0) {
-        e.preventDefault();
-        e.returnValue = '';
-    }
-});
+    window.addEventListener('beforeunload', (e) => {
+        if (Object.keys(changes).length > 0 && !isDemoMode) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+} // --- END IF (isHostApp) ---
+

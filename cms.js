@@ -150,7 +150,7 @@ class ZeroConfigCMS {
       if (!img.src || img.getAttribute('data-cms-fixed')) return;
       try {
         const url = new URL(img.src, window.location.href);
-        if (url.origin !== window.location.origin) {
+        if (url.origin !== window.location.origin && url.protocol !== 'data:') {
           if (this.proxyUrl) {
             console.log(`[CMS] Proxying external image: ${img.src}`);
             img.src = this.proxyUrl + encodeURIComponent(img.src);

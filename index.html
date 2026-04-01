@@ -54,9 +54,14 @@
             if (s.token) document.documentElement.classList.add('authenticated');
 
             // 3. DEMO MODE DETECTION
-            if (u.get('demo') === 'true' || (window.self !== window.top && !window.location.search.includes('token='))) {
+            const isDemo = u.get('demo') === 'true';
+            const isIframe = window.self !== window.top;
+
+            if (isDemo || isIframe) {
                 document.documentElement.classList.add('demo-mode');
-                document.documentElement.classList.add('demo-mode-child'); // Differentiate iframe
+                if (isIframe) {
+                    document.documentElement.classList.add('demo-mode-child'); 
+                }
             }
         } catch(e) {}
     </script>
@@ -1077,14 +1082,7 @@
                     </div>
                     
                     <div class="dock-divider"></div>
-
-                    <div class="dock-divider"></div>
                     
-                    <button class="dock-item" onclick="toggleHistory(true)" style="gap:6px">
-                        <span id="cmsHistoryBtnCount" style="background:var(--primary); color:white; padding:2px 6px; border-radius:100px; font-size:0.7rem; font-weight:800;">0</span>
-                        <span>unsaved</span>
-                    </button>
-
                     <button class="dock-item" id="navSEO" title="Manage SEO Settings">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg>
                         SEO
