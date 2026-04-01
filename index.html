@@ -53,8 +53,9 @@
             const s = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
             if (s.token) document.documentElement.classList.add('authenticated');
 
-            // 3. DEMO MODE DETECTION
-            if (u.get('demo') === 'true' || (window.self !== window.top && !window.location.search.includes('token='))) {
+            // 3. DEMO MODE DETECTION (Only if NOT on localhost/top-level AND demo=true)
+            const isTop = window.top === window.self || window.location.hostname === 'localhost';
+            if (u.get('demo') === 'true' || (!isTop && !window.location.search.includes('token='))) {
                 document.documentElement.classList.add('demo-mode');
                 document.documentElement.classList.add('demo-mode-child'); // Differentiate iframe
             }
@@ -106,8 +107,8 @@
         }
 
         .hidden { display: none !important; }
-        .demo-mode #cmsDashboard { display: none !important; }
-        .demo-mode:not(.demo-mode-child) #cmsDashboard { display: flex !important; } /* Main dashboard stays visible */
+        .demo-mode:not(.authenticated) #cmsDashboard { display: none !important; }
+        .demo-mode:not(.demo-mode-child) #cmsDashboard.active { display: flex !important; } 
 
         /* In the demo iframe: hide irrelevant chrome so the page looks clean */
         .demo-mode-child header,

@@ -72,13 +72,12 @@ export class WebContainerGitService {
     }
     this.isBooting = true;
     try {
-      this.onStatusChange('Initializing FileSystem...');
+      this.onStatusChange('Initializing Engine...');
+      await this.initWebContainer();
       
-      // Start WebContainer and Git Fetching in Parallel
-      const [container, gitResult] = await Promise.all([
-        this.initWebContainer(),
-        this.fetchOrClone()
-      ]);
+      this.onStatusChange('Cloning Repository...');
+      await this.fetchOrClone();
+
 
       this.onStatusChange('Syncing Files...');
       await this.syncToWebContainer();
@@ -128,7 +127,6 @@ export class WebContainerGitService {
           author: { name: 'CMS Sync', email: 'cms@example.com' }
         });
       } else {
-        this.onStatusChange('Cloning Repository...');
         return await this.clone();
       }
     } catch (e) {
@@ -170,7 +168,7 @@ export class WebContainerGitService {
         dir: this.dir,
         url: this.repoUrl,
         corsProxy: this.proxy,
-        onAuth: () => ({ username: 'x-token-auth', password: this.token }),
+        onAuth: () => ({ username: 'x-access-token', password: this.token }),
         onAuthFailure: () => { throw new Error('GitHub authentication failed. Please check your token.'); },
         singleBranch: true,
         depth: 1,

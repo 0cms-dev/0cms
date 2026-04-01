@@ -3,7 +3,8 @@ import { WasmBridge } from './lib/runtime/WasmBridge.js';
 import { IframeSyncService } from './lib/services/IframeSyncService.js';
 import cms from './cms.js'; // The visual editor bridge
 
-const isHostApp = window.self === window.top;
+// Robust detection to ensure we don't suppress the UI in LocalCorp/Proxy environments
+const isHostApp = window.self === window.top || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 // --- RUNTIME: Register Service Worker for WASM Previews ---
 if ('serviceWorker' in navigator && isHostApp) {
@@ -979,10 +980,8 @@ function selectRepo(name) {
     refreshLandingUI();
     // Start the engine
     startCmsEngine(name, getActiveToken());
-    // Explicitly open the dashboard UI
-    if (ui.dashboard.style.display !== 'flex') {
-        window.openDashboard();
-    }
+    // Explicitly open the dashboard UI and force visibility
+    window.openDashboard();
 }
 
 function showToast(msg, type) {
