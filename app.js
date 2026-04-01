@@ -27,7 +27,6 @@ const ui = isHostApp ? {
     btnClose: document.getElementById('btnCloseCms'),
     preview: document.getElementById('cmsPreviewFrame'),
     statusLabel: document.getElementById('cmsStatusLabel'),
-    statusDot: document.getElementById('cmsStatusDot'),
     repoDisplay: document.getElementById('cmsActiveRepo'),
     stepLogin: document.getElementById('cmsStepLogin'),
     stepPicker: document.getElementById('cmsStepPicker'),
@@ -35,7 +34,7 @@ const ui = isHostApp ? {
     repoLoader: document.getElementById('cmsRepoLoader'),
     loginBtn: document.getElementById('cmsLoginBtn'),
     saveBtn: document.getElementById('cmsSaveBtn'),
-    navHistory: document.getElementById('navHistory'),
+    urlChipStatus: document.getElementById('urlChipStatus'),
     navNewPage: document.getElementById('navNewPage'),
     navSEO: document.getElementById('navSEO'),
     historyDrawer: document.getElementById('cmsHistoryDrawer'),
@@ -409,7 +408,7 @@ safeBind(ui.navNewPage, 'onclick', async () => {
 
 ui.pageSettingsPanel = document.getElementById('cmsPageSettingsPanel');
 
-safeBind(ui.navHistory, 'onclick', () => window.toggleHistory());
+safeBind(ui.urlChipStatus, 'onclick', () => window.toggleHistory());
 safeBind(ui.navSEO, 'onclick', () => {
     const isVisible = ui.pageSettingsPanel.style.display === 'flex';
     if (isVisible) {
@@ -423,18 +422,21 @@ safeBind(ui.navSEO, 'onclick', () => {
     }
 });
 
+let lastSEOData = {};
 const syncSEO = () => {
-     ui.preview.contentWindow.postMessage({
-        type: 'CMS_SET_SEO',
+     const data = {
         title: ui.seoTitle.value,
         description: ui.seoDesc.value,
         image: ui.seoImage.value
-    }, '*');
+    };
+    if (JSON.stringify(data) === JSON.stringify(lastSEOData)) return;
+    lastSEOData = data;
+    ui.preview.contentWindow.postMessage({ type: 'CMS_SET_SEO', ...data }, '*');
 };
 
-safeBind(ui.seoTitle, 'oninput', syncSEO);
-safeBind(ui.seoDesc, 'oninput', syncSEO);
-safeBind(ui.seoImage, 'oninput', syncSEO);
+safeBind(ui.seoTitle, 'onblur', syncSEO);
+safeBind(ui.seoDesc, 'onblur', syncSEO);
+safeBind(ui.seoImage, 'onblur', syncSEO);
 
 
 // Window Event Listener for generic postMessages from iframe
@@ -454,32 +456,31 @@ window.addEventListener('message', (e) => {
                 ui.previewLoader.classList.add('hidden');
             }, 500);
         }
-        ui.statusDot.className = 'status-dot on';
-        ui.statusLabel.textContent = '0 Unsaved Changes';
-        ui.statusLabel.style.color = 'var(--text-muted)';
+        if (ui.statusLabel) {
+            ui.statusLabel.textContent = '0 unsaved changes';
+            ui.statusLabel.style.color = 'var(--text-muted)';
+        }
+        const statusIcon = document.getElementById('cmsStatusIcon');
+        if (statusIcon) statusIcon.style.stroke = 'var(--text-muted)';
+        
+        // FORCE ENABLE BRIDGE
+        ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
     }
 
     if (e.data.type === 'CMS_CHANGED') {
+        const count = Object.keys(e.data.changes).length;
         changes = e.data.changes;
-        let entries = e.data.entries || [];  // local scoped
-        const count = Object.keys(changes).length;
-        ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+        entries = e.data.entries || []; // Update global, no shadowing
         
-        // Update dynamic status
-        ui.statusLabel.textContent = `${count} ${count === 1 ? 'Change' : 'Changes'} Unsaved`;
+        ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+        ui.statusLabel.textContent = `${count} unsaved change${count !== 1 ? 's' : ''}`;
         ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
         
-        // DEMO COACH MARK: Show a visual hint for the diff feature on first edit
-        if (isDemoMode && count > 0 && !window._zcmsCoachMarkShown) {
-            const mark = document.getElementById('demoCoachMark');
-            if (mark) {
-                mark.style.display = 'block';
-                window._zcmsCoachMarkShown = true;
-                setTimeout(() => mark.style.opacity = '0', 8000);
-                setTimeout(() => mark.style.display = 'none', 8500);
-            }
-        }
-
+        const statusIcon = document.getElementById('cmsStatusIcon');
+        if (statusIcon) statusIcon.style.stroke = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        
+        if (ui.historyCount) ui.historyCount.textContent = count;
+        
         // REAL-TIME SYNC: Apply the last change to the WebContainer FS
         if (entries.length > 0 && cmsService) {
             const lastEntry = entries[entries.length - 1];
@@ -489,11 +490,8 @@ window.addEventListener('message', (e) => {
                     lastEntry.updated, 
                     lastEntry.sourceFile || null
                  ).then(async (result) => {
-                    // SYNC TO WASM RUNTIME: Ensure PHP/Python preview sees the change
                     if (result && result.path && result.content) {
                         WasmBridge.getInstance().syncFile(result.path, result.content);
-                        
-                        // NEW: FLICKER-FREE HMR (SUPER-MORPH)
                         const currentUrl = ui.preview.src;
                         IframeSyncService.getInstance().sync(ui.preview, currentUrl, result.markerId);
                     }
@@ -506,25 +504,32 @@ window.addEventListener('message', (e) => {
         
         if (e.data.canRedo) ui.navForward.classList.remove('disabled');
         else ui.navForward.classList.add('disabled');
-        
-        if (ui.historyCount) ui.historyCount.textContent = count;
-        
+
         if (ui.historyList) {
             if (count === 0) {
                 ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
             } else {
-                ui.historyList.innerHTML = entries.map(entry => {
+                const displayEntries = [...entries].reverse();
+                ui.historyList.innerHTML = displayEntries.map(entry => {
                     const oldVal = (entry.original || '').trim();
                     const newVal = (entry.updated || '').trim();
+                    const isImage = newVal.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || (newVal.startsWith('http') && (oldVal.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || oldVal === ''));
                     const displayOld = oldVal.length > 50 ? oldVal.substring(0, 50) + '...' : oldVal;
                     const displayNew = newVal.length > 50 ? newVal.substring(0, 50) + '...' : newVal;
 
+                    const isSEO = entry.selector.startsWith('seo:');
+                    let label = entry.selector;
+                    if (isSEO) {
+                        label = entry.selector.replace('seo:', 'SEO ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    }
+
                     return `
-                    <div class="history-item" onclick="highlightElement('${entry.selector}')">
+                    <div class="history-item" onclick="${isSEO ? '' : `highlightElement('${entry.selector}')`}">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span class="history-item-label" style="font-size:0.75rem; opacity:0.6; display:flex; align-items:center; gap:4px;">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                                 ${entry.time}
+                                ${isSEO ? `• <span style="color:var(--primary); font-weight:700;">${label}</span>` : ''}
                             </span>
                             <button class="btn-undo" onclick="event.stopPropagation(); undoChange('${entry.selector}')">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 018 8v2M3 10l6-6M3 10l6 6"/></svg>
@@ -532,10 +537,23 @@ window.addEventListener('message', (e) => {
                             </button>
                         </div>
                         <div class="history-item-diff">
-                            <div class="diff-old">${displayOld || 'None'}</div>
-                            <div style="font-size:0.6rem; opacity:0.5; margin: -2px 0;">CHANGES TO ➜</div>
-                            <div class="diff-new">${displayNew || 'Empty'}</div>
+                            ${isImage ? `
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <div style="width:40px; height:40px; border-radius:4px; overflow:hidden; border:1px solid var(--border); background:#eee;">
+                                        <img src="${oldVal}" style="width:100%; height:100%; object-fit:cover; opacity:0.5;">
+                                    </div>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <div style="width:40px; height:40px; border-radius:4px; overflow:hidden; border:1px solid var(--primary); background:#fff;">
+                                        <img src="${newVal}" style="width:100%; height:100%; object-fit:cover;">
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="diff-old">${displayOld || '(Empty)'}</div>
+                                <div style="font-size:0.6rem; opacity:0.5; margin: -2px 0; font-weight:700;">TO ➜</div>
+                                <div class="diff-new">${displayNew || '(Empty)'}</div>
+                            `}
                         </div>
+                        <div class="history-item-selector" title="${entry.selector}">${isSEO ? 'Metadata Optimization' : entry.selector}</div>
                     </div>
                 `;}).join('');
             }
@@ -575,13 +593,9 @@ async function startCmsEngine(repo, token, demo = false) {
     isDemoMode = !!demo;
     
     ui.repoDisplay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${repo}`;
-    
-    const demoBadge = document.getElementById('demoBadge');
-    if (demoBadge) demoBadge.style.display = isDemoMode ? 'inline-block' : 'none';
 
     if (isDemoMode) {
-        ui.statusLabel.textContent = 'Demo Mode Active';
-        ui.statusDot.className = 'status-dot on';
+        ui.statusLabel.textContent = '0 Changes Unsaved';
         ui.previewLoader.classList.add('hidden');
         
         // STABILITY DELAY: Wait 300ms before hitting the same origin again for the iframe.

@@ -416,7 +416,10 @@
             padding: 6px 16px; border-radius: 50px; font-size: 0.81rem; 
             font-weight: 700; cursor: pointer; transition: all 0.2s;
         }
-        .btn-toggle:hover { transform: scale(1.05); opacity: 0.9; }
+        .btn-toggle:hover { background: var(--primary); color: white; opacity: 1; }
+        .hero-cta-primary:hover { 
+            box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.4); 
+        }
 
 
         .dashboard-main { 
@@ -826,19 +829,19 @@
         }
 
         .history-item { 
-            padding: 16px; background: var(--glass); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px;
-            display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; transition: transform 0.2s;
+            padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px;
+            display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; transition: transform 0.2s, border-color 0.2s;
             cursor: pointer;
         }
         .history-item:hover { transform: translateY(-2px); border-color: var(--primary); }
         .history-item-label { font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
         .history-item-diff { 
-            padding: 12px; background: rgba(0,0,0,0.05); border-radius: 8px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;
+            padding: 12px; background: var(--bg-secondary); border-radius: 8px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;
             display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--border);
         }
-        .diff-old { padding: 4px 8px; border-radius: 4px; background: #ffe3e3; text-decoration: line-through; color: #c92a2a; border: 1px solid #ffa8a8; font-weight: 500; }
-        .diff-new { padding: 4px 8px; border-radius: 4px; background: #d3f9d8; font-weight: 700; color: #2b8a3e; border: 1px solid #8ce99a; }
-        .history-item-selector { font-family: monospace; opacity: 0.4; font-size: 0.6rem; margin-top: 4px; cursor: help; }
+        .diff-old { padding: 4px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.1); text-decoration: line-through; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-weight: 500; }
+        .diff-new { padding: 4px 8px; border-radius: 4px; background: rgba(34, 197, 94, 0.1); font-weight: 700; color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); }
+        .history-item-selector { font-family: monospace; opacity: 0.3; font-size: 0.6rem; margin-top: 4px; cursor: help; }
         .btn-undo { 
             align-self: flex-end; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); 
             background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.75rem; 
@@ -1041,7 +1044,6 @@
 
     <!-- QUANTUM DASHBOARD OVERLAY -->
     <div id="cmsDashboard">
-        <div class="cms-demo-shell-badge">Live Demo Mode</div>
         <div class="dashboard-main">
             <div id="previewLoader" class="preview-loader">
                 <div class="loader-spinner"></div>
@@ -1053,10 +1055,9 @@
                     See your changes here! 💡
                 </div>
                 <div class="command-pill">
-                    <div class="url-chip">
-                        <span id="cmsStatusDot" class="status-dot off"></span>
-                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>
-                        <div id="demoBadge" style="display:none; margin-left:8px; padding:2px 6px; background:var(--primary); color:white; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:0.05em;">DEMO</div>
+                    <div class="url-chip" id="urlChipStatus" style="cursor:pointer;" title="Click to view unsaved changes">
+                        <svg id="cmsStatusIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">0 unsaved changes</span>
                     </div>
                     
                     <div class="dock-divider"></div>
@@ -1076,10 +1077,6 @@
                     
                     <div class="dock-divider"></div>
 
-                    <button class="dock-item" id="navHistory" title="View Unsaved Changes">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Changes
-                    </button>
 
                     <button class="dock-item" id="navNewPage" title="Create New Content" style="display:none;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
