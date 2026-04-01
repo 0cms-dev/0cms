@@ -64,9 +64,15 @@ const ui = isHostApp ? {
     accountDropdown: document.getElementById('accountDropdown'),
     repoSearchInput: document.getElementById('repoSearchInput'),
     ghAppSettingsLink: document.getElementById('ghAppSettingsLink'),
-    navDemoBtn: document.getElementById('landingDemoBtn'), // Added this
+    navDemoBtn: document.getElementById('landingDemoBtn'),
     prewarmLoader: document.getElementById('prewarmLoader'),
-    toast: document.getElementById('cmsToast')
+    toast: document.getElementById('cmsToast'),
+    
+    // EXTRACTION UI
+    btnExtractMode: document.getElementById('btnExtractMode'),
+    extractPanel: document.getElementById('cmsExtractPanel'),
+    extractNameInput: document.getElementById('extractComponentName'),
+    btnConfirmExtract: document.getElementById('btnConfirmExtract')
 } : {};
 
 
@@ -149,6 +155,58 @@ if (isDemoMode && isHostApp) {
          window.startDemoMode();
     });
 }
+
+// --- COMPONENT EXTRACTION LOGIC ---
+let isExtractMode = false;
+
+window.toggleExtractMode = (enabled) => {
+    isExtractMode = enabled !== undefined ? enabled : !isExtractMode;
+    ui.btnExtractMode?.classList.toggle('active', isExtractMode);
+    ui.extractPanel.style.display = isExtractMode ? 'flex' : 'none';
+    
+    // Notify the bridge
+    ui.preview?.contentWindow.postMessage({ 
+        type: 'CMS_EXTRACT_MODE', 
+        enabled: isExtractMode 
+    }, '*');
+    
+    if (isExtractMode) showToast('Click any element to select for extraction', 'info');
+};
+
+safeBind(ui.btnExtractMode, 'onclick', () => window.toggleExtractMode());
+
+safeBind(ui.btnConfirmExtract, 'onclick', () => {
+    const name = ui.extractNameInput.value.trim();
+    if (!name) return showToast('Please enter a component name', 'error');
+    
+    ui.preview?.contentWindow.postMessage({ 
+        type: 'CMS_EXTRACT_TRIGGER', 
+        name: name 
+    }, '*');
+});
+
+// Listener for extracted data from bridge
+window.addEventListener('message', async (e) => {
+    if (e.data.type === 'CMS_COMPONENT_DATA') {
+        const { name, html, css } = e.data;
+        if (!cmsService || !cmsService.activeDriver) {
+            return showToast('Engine not ready', 'error');
+        }
+        
+        try {
+            const files = cmsService.activeDriver.templating.prepareComponentFiles(name, html, css);
+            for (const [path, content] of Object.entries(files)) {
+                await cmsService.updateFile(path, content);
+            }
+            showToast(`Component "${name}" extracted successfully!`, 'success');
+            window.toggleExtractMode(false);
+            ui.extractNameInput.value = '';
+        } catch (err) {
+            console.error('[Extraction] Failed to write files:', err);
+            showToast('Failed to save component', 'error');
+        }
+    }
+});
 
 window.openDashboard = async () => {
     if (!ui.dashboard) return;

@@ -1,7 +1,7 @@
 import git from '/lib/isomorphic-git.js';
 import FS from '/lib/lightning-fs.js';
 import { WebContainer } from '/lib/webcontainer-api.js';
-import { FRAMEWORKS, GENERIC_VITE } from './Frameworks.js';
+import { FrameworkBroker } from './lib/frameworks/FrameworkBroker.js';
 /**
  * WebContainerGitService
  * Orchestrates Git operations in browser-persistent storage and 
@@ -35,8 +35,9 @@ export class WebContainerGitService {
     // Track files actually modified by applySmartMatchChange so we know what to sync
     this._modifiedFiles = new Set();
 
-    // Framework detection
-    this.detectedFramework = null;
+    // Framework detection and drivers
+    this.broker = null;
+    this.activeDriver = null;
   }
 
   /**
@@ -182,6 +183,7 @@ export class WebContainerGitService {
   async initWebContainer() {
     if (!this.webcontainerInstance) {
       this.webcontainerInstance = await WebContainer.boot();
+      this.broker = new FrameworkBroker(this.webcontainerInstance);
     }
   }
 
@@ -220,129 +222,47 @@ export class WebContainerGitService {
     // Check if we have a cached build to serve instantly
     const hasCache = await this.fs.readdir('/__qcms_cache__').then(e => e.length > 0).catch(() => false);
     
-    // 1. Create the middleware proxy script
-    const middlewareContent = `
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const TARGET_PORT = process.env.TARGET_PORT || 4000;
-const PROXY_PORT = 3001;
-
-const findInCache = (url) => {
-    const cacheDir = '/__qcms_cache__';
-    const normalizedUrl = url === '/' ? '/index.html' : url;
-    const fullPath = path.join(cacheDir, normalizedUrl);
-    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) return fullPath;
-    const altPaths = [
-        path.join(cacheDir, 'index.html'),
-        path.join(cacheDir, 'public/index.html'),
-        path.join(cacheDir, 'dist/index.html'),
-        path.join(cacheDir, '_site/index.html')
-    ];
-    for (const alt of altPaths) {
-        if (fs.existsSync(alt) && fs.statSync(alt).isFile()) return alt;
-    }
-    return null;
-};
-
-const server = http.createServer((req, res) => {
-  if (req.url === '/__zcms_ping') {
-      res.writeHead(200); res.end('pong'); return;
-  }
-  if (req.url.endsWith('/zcms-bridge.js')) {
-    try {
-      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cross-Origin-Resource-Policy': 'cross-origin', 'Access-Control-Allow-Origin': '*' });
-      res.end(fs.readFileSync('./zcms-bridge.js', 'utf8'));
-      return;
-    } catch (e) {}
-  }
-  const options = { hostname: '127.0.0.1', port: TARGET_PORT, path: req.url, method: req.method, headers: req.headers };
-  const proxyReq = http.request(options, (proxyRes) => {
-    const contentType = proxyRes.headers['content-type'] || '';
-    if (contentType.includes('text/html')) {
-      let body = [];
-      proxyRes.on('data', (chunk) => body.push(chunk));
-      proxyRes.on('end', () => {
-        let html = Buffer.concat(body).toString('utf8');
-        if (html.includes('</body>') && !html.includes('zcms-bridge.js')) {
-          html = html.replace('</body>', '<script type="module" src="/zcms-bridge.js"></script></body>');
-        }
-        const headers = { ...proxyRes.headers }; delete headers['content-length'];
-        res.writeHead(proxyRes.statusCode, headers); res.end(html);
+    // 1. Create the middleware proxy script from the active driver
+    // If no driver, use a basic fallback
+    const middlewareContent = this.activeDriver?.server.getMiddlewareScript(hasCache ? 4000 : null) || `
+      const http = require('http');
+      const server = http.createServer((req, res) => {
+        res.writeHead(502); res.end('No framework driver active.');
       });
-    } else {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers); proxyRes.pipe(res);
-    }
-  });
-  proxyReq.on('error', (e) => {
-    const cachePath = findInCache(req.url);
-    if (cachePath) {
-      const ext = path.extname(cachePath);
-      const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[ext] || 'text/plain';
-      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache', 'Cross-Origin-Resource-Policy': 'cross-origin' });
-      res.end(fs.readFileSync(cachePath));
-    } else {
-      res.writeHead(502); res.end('Proxy Error: SSG down and no cache');
-    }
-  });
-  req.pipe(proxyReq);
-});
-server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge running on port ' + PROXY_PORT));
+      server.listen(3001, '0.0.0.0');
     `;
     
-    // Use relative paths for writing within the WebContainer
+    // 2. Fetch the Bridge script (cms.js) and write both to the WebContainer
     const bridgeResponse = await fetch('/cms.js');
     const bridgeContent = await bridgeResponse.text();
     
     await this.webcontainerInstance.fs.writeFile('zcms-bridge.js', bridgeContent);
     await this.webcontainerInstance.fs.writeFile('zcms-middleware.js', middlewareContent);
+    
+    // 3. If the driver has a custom tagger, install it
+    if (this.activeDriver?.content) {
+        const tagger = this.activeDriver.content.getTaggerScript(this.activeDriver.id);
+        if (this.activeDriver.id === 'hexo') {
+            await this.webcontainerInstance.fs.mkdir('scripts', { recursive: true });
+            await this.webcontainerInstance.fs.writeFile('scripts/zcms-tagger.js', tagger);
+        }
+    }
   }
 
   /**
    * Identifies the framework by checking package.json and file signatures.
    */
   async autoDetectFramework() {
+    this.onLog('[Auto-Detect] Scanning for framework signals using semantic drivers...');
     try {
-      this.onLog('[Auto-Detect] Scanning for framework signals...');
-      const pkgRaw = await this.webcontainerInstance.fs.readFile('/package.json', 'utf8').catch(() => null);
-      const rootFiles = await this.webcontainerInstance.fs.readdir('/').catch(() => []);
-      
-      const pkg = pkgRaw ? JSON.parse(pkgRaw) : {};
-      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-
-      // 1. Layered Detection: Match profiles from Frameworks.js
-      let match = FRAMEWORKS.find(fw => {
-        // Dependency Match
-        const depMatch = fw.signals.deps && fw.signals.deps.some(d => deps[d]);
-        // File Signature Match
-        const fileMatch = fw.signals.files && fw.signals.files.some(f => rootFiles.includes(f));
-        return depMatch || fileMatch;
-      });
-
-      // 2. Generic Vite Fallback
-      if (!match) {
-        const isVite = GENERIC_VITE.signals.deps.some(d => deps[d]) || rootFiles.includes('vite.config.js') || rootFiles.includes('vite.config.ts');
-        if (isVite) match = GENERIC_VITE;
-      }
-
-      if (match) {
-        this.detectedFramework = match;
-        this.onLog(`[Auto-Detect] Matched Profile: ${match.name}`);
-        
-        // Auto-inject tagger if defined
-        if (match.tagger) {
-          const taggerCode = match.tagger();
-          if (match.id === 'hexo') {
-            await this.webcontainerInstance.fs.mkdir('scripts', { recursive: true });
-            await this.webcontainerInstance.fs.writeFile('scripts/zcms-tagger.js', taggerCode);
-          }
-          // Note: Vite/Next.js/Astro tagging can be added here as we expand
-        }
+      this.activeDriver = await this.broker.detect();
+      if (this.activeDriver) {
+          this.onLog(`[Auto-Detect] Matched Driver: ${this.activeDriver.name}`);
       } else {
-        this.onLog('[Auto-Detect] No specific framework profile matched. Using generic defaults.');
+          this.onLog('[Auto-Detect] No specific driver matched. Using generic fail-safe.');
       }
     } catch (e) {
-      this.onLog(`[Warning] Auto-detection failed: ${e.message}`);
+      this.onLog(`[Warning] Framework detection failed: ${e.message}`);
     }
   }
 
@@ -406,9 +326,9 @@ server.listen(PROXY_PORT, '0.0.0.0', () => console.log('[Middleware] CMS Bridge 
         }
 
         // 2. Fallback to framework default command if no package scripts matched
-        if (!devCommand && this.detectedFramework) {
-            devCommand = this.detectedFramework.defaults.command;
-            this.onLog(`[Auto-Detect] Using framework default command: ${devCommand}`);
+        if (!devCommand && this.activeDriver) {
+            devCommand = this.activeDriver.server.getDevCommand();
+            this.onLog(`[Auto-Detect] Using driver default command: ${devCommand}`);
         }
       } catch (e) {
         this.onLog(`[Warning] Error deciding dev command: ${e.message}`);

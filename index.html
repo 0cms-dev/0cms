@@ -27,17 +27,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
     
-    <!-- NITRO PRELOAD: Start warming up the engine in the background -->
+    <link rel="stylesheet" href="/style.css">
+    
+    <!-- NITRO PRELOAD -->
     <link rel="modulepreload" href="/lib/isomorphic-git.js">
     <link rel="modulepreload" href="/lib/lightning-fs.js">
     <link rel="modulepreload" href="/lib/webcontainer-api.js">
     <link rel="modulepreload" href="/lib/isomorphic-git-http.js">
     <link rel="modulepreload" href="/cms.js">
 
-    <!-- INSTANT AUTH DETECTION (No Flicker) -->
+    <!-- INSTANT AUTH DETECTION -->
     <script>
         try {
-            // 1. EXTRACT FROM URL (Instant session capture)
             const u = new URLSearchParams(window.location.search);
             const t = u.get('token');
             if (t) {
@@ -46,1078 +47,194 @@
                 const i = u.get('installation_id');
                 if (i) s.installation_id = i;
                 localStorage.setItem('zcms-settings', JSON.stringify(s));
-                // CLEAN URL WITHOUT RELOAD (Immediate!)
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
-            // 2. APPLY STATE CLASS
             const s = JSON.parse(localStorage.getItem('zcms-settings') || '{}');
             if (s.token) document.documentElement.classList.add('authenticated');
-
-            // 3. DEMO MODE DETECTION
             const isDemo = u.get('demo') === 'true';
             const isIframe = window.self !== window.top;
-
             if (isDemo || isIframe) {
                 document.documentElement.classList.add('demo-mode');
-                if (isIframe) {
-                    document.documentElement.classList.add('demo-mode-child'); 
-                }
+                if (isIframe) document.documentElement.classList.add('demo-mode-child'); 
             }
         } catch(e) {}
     </script>
-
-    <style>
-        :root {
-            --bg: #ffffff;
-            --bg-secondary: #f5f5f5;
-            --bg-tertiary: #f0f0f0;
-            --text: #111827;
-            --text-muted: #6b7280;
-            --primary: #7c3aed;
-            --primary-hover: #6d28d9;
-            --border: #e5e7eb;
-            --glass: rgba(255, 255, 255, 0.82);
-            --card-bg: #ffffff;
-            --sidebar: #fafafa;
-            --sidebar-active: #f3f4f6;
-            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            --font: 'Inter', system-ui, -apple-system, sans-serif;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #0a0a0a;
-                --bg-secondary: #141414;
-                --bg-tertiary: #1a1a1a;
-                --text: #f5f5f5;
-                --text-muted: #a3a3a3;
-                --border: #262626;
-                --glass: rgba(10, 10, 10, 0.82);
-                --card-bg: #111111;
-                --sidebar: #050505;
-                --sidebar-active: #141414;
-                --shadow: 0 10px 20px rgba(0,0,0,0.5);
-            }
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            font-family: var(--font); 
-            color: var(--text); 
-            background: var(--bg); 
-            line-height: 1.5; 
-            -webkit-font-smoothing: antialiased; 
-            transition: background 0.3s, color 0.3s;
-        }
-
-        .hidden { display: none !important; }
-        .demo-mode #cmsDashboard { display: none !important; }
-        .demo-mode:not(.demo-mode-child) #cmsDashboard { display: flex !important; } /* Main dashboard stays visible */
-
-        /* In the demo iframe: hide footer but show header for branding */
-        .demo-mode-child footer { display: none !important; }
-        .demo-mode-child main { padding-top: 1rem !important; }
-
-        .demo-mode .cms-demo-shell-badge { display: block; }
-        
-        .cms-demo-shell-badge {
-            display: none;
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--primary);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.1em;
-            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
-            text-transform: uppercase;
-            z-index: 10006;
-            pointer-events: none;
-        }
-        .demo-mode .cms-demo-shell-badge { display: block; }
-
-        /* AUTHENTICATED STATE */
-        .authenticated #landingLoginBtn,
-        .authenticated #landingDemoBtn { display: none !important; }
-        .authenticated #heroAuthAction { gap: 0; }
-        .authenticated #cmsLandingProject { display: flex !important; }
-        
-        .demo-welcome-card {
-            display: none;
-            position: fixed;
-            top: 100px;
-            right: 40px;
-            width: 300px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            z-index: 10005;
-            animation: demoSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes demoSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-        .demo-mode #demoWelcomeCard { display: block; }
-        
-        .demo-welcome-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-        .demo-welcome-icon { font-size: 1.5rem; }
-        .demo-welcome-card h3 { font-size: 0.95rem; margin: 0; font-family: 'Outfit', sans-serif; }
-        .demo-welcome-card p { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
-        .demo-step { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; margin-bottom: 8px; font-weight: 600; }
-        .demo-step span { width: 16px; height: 16px; background: var(--bg-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: var(--primary); }
-        .demo-welcome-card button { 
-            width: 100%; padding: 10px; border-radius: 10px; border: none; background: var(--primary); color: white; 
-            font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: 0.2s;
-        }
-        .demo-welcome-card button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
-
-        /* Coach Mark (Visual Pointer) */
-        .demo-coach-mark {
-            display: none;
-            position: absolute;
-            bottom: calc(100% + 20px);
-            left: 20px;
-            z-index: 10008;
-            background: var(--primary);
-            color: white;
-            padding: 8px 14px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 800;
-            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.5);
-            animation: coachFloat 2s ease-in-out infinite;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-        .demo-coach-mark::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 24px;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
-            border-top: 7px solid var(--primary);
-        }
-        @keyframes coachFloat {
-            0%, 100% { transform: translateY(0) scale(1); }
-            50% { transform: translateY(-8px) scale(1.03); }
-        }
-
-        #cmsDashboard {
-            display: none; /* Stay none until active to avoid layout issues */
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            background: rgba(255, 255, 255, 0.4);
-            backdrop-filter: blur(28px);
-            -webkit-backdrop-filter: blur(28px);
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transform: translateY(100%);
-            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            pointer-events: none;
-        }
-        #cmsDashboard.active {
-            display: flex;
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: all;
-        }
-        #cmsDashboard.demo-active {
-            top: 72px;
-            z-index: 99;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            #cmsDashboard { background: rgba(10, 10, 10, 0.4); }
-        }
-
-        /* HEADER & NAVIGATION */
-        header { 
-            height: 72px; 
-            padding: 0 2rem; 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            border-bottom: 1px solid var(--border); 
-            position: sticky; 
-            top: 0; 
-            background: var(--glass); 
-            backdrop-filter: blur(8px); 
-            z-index: 100;
-        }
-        .logo { 
-            display: flex; 
-            align-items: center; 
-            gap: 10px; 
-            text-decoration: none; 
-            cursor: pointer;
-            user-select: none;
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .logo:hover { transform: translateY(-1px); }
-        .hidden { display: none !important; }
-
-        /* Dashboard state will now be handled by .active class above */
-
-        @media (prefers-color-scheme: dark) {
-            #cmsDashboard { background: rgba(10, 10, 10, 0.4); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        .logo-box { 
-            width: 32px; 
-            height: 32px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            position: relative;
-        }
-        .logo-box svg { 
-            position: absolute; inset: 0; width: 100%; height: 100%; 
-            filter: drop-shadow(0 0 12px rgba(124, 58, 237, 0.15));
-        }
-        .logo-text { display: none; }
-
-        .logo-display-card {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 4rem;
-            animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .logo-display-card .logo { gap: 16px; transform: scale(1.5); pointer-events: none; }
-        .logo-display-card .logo-box { width: 44px; height: 44px; }
-        .logo-display-card .logo-text { font-size: 2.2rem; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        nav ul { display: flex; gap: 2rem; list-style: none; }
-        nav a { text-decoration: none; color: var(--text-muted); font-size: 0.93rem; font-weight: 500; transition: color 0.2s; }
-        nav a:hover { color: var(--text); }
-
-        /* MAIN LANDING */
-        main { 
-            max-width: 1000px; 
-            margin: 0 auto; 
-            padding: 6rem 2rem; 
-        }
-        .hero { text-align: center; margin-bottom: 8rem; }
-        .hero h1 { 
-            font-size: 4.5rem; 
-            font-weight: 900; 
-            letter-spacing: -0.05em; 
-            line-height: 1; 
-            margin-bottom: 1.5rem; 
-            color: var(--text); 
-        }
-        .hero .teaser { 
-            font-size: 1.25rem; 
-            color: var(--text-muted); 
-            max-width: 600px; 
-            margin: 0 auto 3rem; 
-            line-height: 1.6; 
-        }
-
-        #heroAuthAction { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; }
-        .hero-cta { 
-            padding: 16px 40px; 
-            font-size: 1.1rem; 
-            font-weight: 600; 
-            border-radius: 100px; 
-            cursor: pointer; 
-            transition: 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .hero-cta-primary { background: var(--primary); color: white; border: none; box-shadow: 0 10px 20px -5px var(--primary); }
-        .hero-cta-primary:hover { transform: translateY(-2px); 
-            box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.4); 
-        }
-
-        .prewarm-loading { 
-            width: 14px; height: 14px; 
-            border: 2px solid rgba(255,255,255,0.3); 
-            border-top-color: #fff; 
-            border-radius: 50%; 
-            animation: spin 0.8s linear infinite; 
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* AUTH-BASED VISIBILITY (INSTANT) */
-        .hero #landingLoginBtn { display: flex; }
-        .hero #cmsLandingProject { display: none; }
-        #landingRepoSection { display: none; }
-
-        .authenticated .hero #landingLoginBtn { display: none !important; }
-        .authenticated .hero #cmsLandingProject { display: flex !important; }
-        .authenticated #landingRepoSection { display: block !important; }
-
-        .project-card { 
-            background: var(--card-bg); 
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px 18px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            cursor: pointer;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .project-card:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.15); }
-        .project-name { font-weight: 600; font-size: 1rem; color: var(--text); }
-        .project-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-        
-        .features-grid { 
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 16px; 
-            margin-top: 1.5rem;
-        }
-        
-        .prewarm-loading { display: none; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .content-section { margin-bottom: 6rem; position: relative; }
-        .content-section h2 { 
-            font-size: 2.5rem; 
-            font-weight: 800; 
-            letter-spacing: -0.03em; 
-            margin-bottom: 1.5rem; 
-        }
-        .content-section p { 
-            font-size: 1.125rem; 
-            color: var(--text-muted); 
-            max-width: 700px; 
-            margin-bottom: 2rem; 
-        }
-        .featured-image { 
-            width: 100%; 
-            border-radius: 16px; 
-            box-shadow: var(--shadow); 
-            border: 1px solid var(--border); 
-            margin: 2rem 0; 
-            aspect-ratio: 16/9;
-            object-fit: cover;
-        }
-
-        /* FOOTER */
-        footer { 
-            border-top: 1px solid var(--border); 
-            padding: 4rem 2rem; 
-            text-align: center; 
-            color: var(--text-muted); 
-            font-size: 0.875rem; 
-        }
-
-
-        .btn-toggle { 
-            background: var(--text); color: var(--bg); border: none; 
-            padding: 6px 16px; border-radius: 50px; font-size: 0.81rem; 
-            font-weight: 700; cursor: pointer; transition: all 0.2s;
-        }
-        .btn-toggle:hover { transform: scale(1.05); opacity: 0.9; }
-
-
-        .dashboard-main { 
-            flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; width: 100vw; height: 100vh;
-            transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .dashboard-main.drawer-left-open { padding-left: 340px; }
-        /* No right drawer shift anymore */
-
-        .dashboard-main.drawer-left-open.drawer-right-open .command-pill { left: 50%; }
-        @keyframes dockSlideUp { 0% { opacity: 0; transform: translate(-50%, 40px); } 100% { opacity: 1; transform: translate(-50%, 0); } }
-        
-        .hud-container {
-            position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 12px; z-index: 10002;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            animation: dockSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .dashboard-main.drawer-left-open .hud-container { left: calc(50% + 170px); }
-        
-        .command-pill { 
-            position: relative; left: auto; transform: none; bottom: auto;
-            background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-            border: 1px solid var(--border);
-            padding: 8px 8px; border-radius: 100px; display: flex; align-items: center; gap: 4px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05);
-            animation: none;
-        }
-        
-        .dock-item {
-            display: flex; align-items: center; justify-content: center;
-            padding: 8px 16px; border-radius: 100px; background: transparent;
-            color: var(--text-muted); font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: 0.2s;
-        }
-        .dock-item:hover { background: var(--bg-secondary); color: var(--text); }
-        .dock-item.active { 
-            background: var(--bg-tertiary); color: var(--text);
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-        }
-        .dock-item.active svg { stroke: var(--text); }
-        .dock-item.exit-item { 
-            width: 44px; height: 44px; border-radius: 50%; padding: 0;
-            background: var(--glass); display: flex; align-items: center; justify-content: center;
-            border: 1px solid var(--border); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1); color: #f43f5e; opacity: 0.9;
-        }
-        .dock-item.exit-item:hover { color: white; opacity: 1; background: #f43f5e; border-color: #f43f5e; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4); }
-        .dock-item.exit-item svg { margin: 0; width: 22px; height: 22px; }
-        .dock-item svg { width: 18px; height: 18px; margin-right: 6px; }
-        .dock-item.icon-only { padding: 8px 12px; }
-        .dock-item.icon-only svg { margin-right: 0; }
-        
-        .dock-divider { width: 1px; height: 24px; background: var(--border); margin: 0 8px; }
-
-        .url-chip { background: transparent; padding: 6px 12px; font-size: 0.81rem; display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; position: relative; }
-        .status-dot.off { background: var(--text-muted); }
-
-        .btn-cms { padding: 10px 20px; border-radius: 100px; font-size: 0.875rem; font-weight: 700; cursor: pointer; transition: 0.2s; border: none; line-height: 1; display: flex; align-items: center; }
-        .btn-cms-outline { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
-        .btn-cms-outline:hover { color: var(--text); border-color: var(--text-muted); }
-        .btn-cms-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2); }
-        .btn-cms-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3); }
-
-        .onboarding-screen { position: absolute; inset: 0; background: var(--bg); z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .onboarding-card { background: var(--bg-secondary); width: 100%; max-width: 440px; padding: 40px; border-radius: 16px; border: 1px solid var(--border); text-align: center; }
-        .onboarding-card h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.03em; color: var(--text); }
-        .onboarding-card p { color: var(--text-muted); font-size: 0.93rem; margin-bottom: 30px; }
-
-        .repo-list { max-height: 280px; overflow-y: auto; text-align: left; background: var(--bg); border-radius: 12px; border: 1px solid var(--border); }
-        .repo-item { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; color: var(--text); }
-        .repo-item:last-child { border-bottom: none; }
-        .repo-item:hover { background: var(--bg-secondary); }
-        
-        /* LANDING PROJECT CARD */
-        #cmsLandingProject {
-            max-width: 440px; margin: -4rem auto 6rem; padding: 16px 20px;
-            background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px;
-            text-align: left; display: flex; align-items: center; gap: 16px;
-            box-shadow: var(--shadow);
-        }
-        .project-card { 
-            background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; 
-            padding: 24px; display: flex; align-items: center; gap: 0; cursor: pointer; transition: 0.3s; 
-        }
-        .project-card:hover { 
-            transform: translateY(-4px); border-color: var(--primary); background: var(--bg);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        .project-name { font-weight: 700; font-size: 1.1rem; color: var(--text); }
-        .project-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-
-        /* REPO PICKER CONTROLS */
-        .repo-controls { display: flex; gap: 12px; margin-bottom: 24px; align-items: stretch; position: relative; }
-        
-        .account-switcher-group {
-            width: 260px; flex-shrink: 0; display: flex; align-items: stretch; height: 44px; box-sizing: border-box;
-            background: var(--bg); border: 1px solid var(--border);
-            border-radius: 12px; transition: 0.2s; min-width: 0;
-            position: relative;
-        }
-        .account-switcher-group:hover { border-color: var(--text-muted); }
-
-        .account-switcher {
-            flex: 1; display: flex; align-items: center; gap: 10px;
-            padding: 8px 12px; cursor: pointer; position: relative;
-            min-width: 0; background: transparent; border: none; border-radius: 12px 0 0 12px;
-            text-align: left; color: inherit; font-family: inherit;
-        }
-        .account-switcher:hover { background: var(--bg-secondary); }
-        
-        .account-switcher-divider {
-            width: 1px; background: var(--border); margin: 6px 0; transition: 0.2s;
-        }
-
-        .account-avatar { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; background: var(--bg-secondary); }
-        .account-name { font-size: 0.9rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-        .account-switcher svg.chevron { flex-shrink: 0; transition: 0.2s; }
-        .account-switcher.active svg.chevron { transform: scale(0.9); opacity: 0.8; }
-        
-        .search-container {
-            position: relative; display: flex; align-items: center; justify-content: flex-end; transition: 0.3s; margin-left: auto;
-        }
-        .search-icon { 
-            position: absolute; right: 14px; color: var(--text-muted); pointer-events: none; z-index: 1; transition: 0.2s;
-        }
-        .search-input {
-            width: 44px; height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 12px;
-            border: 1px solid var(--border); background: var(--bg);
-            color: var(--text); font-size: 0.9rem; outline: none; transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            cursor: pointer;
-        }
-        .search-input::placeholder { color: transparent; }
-        .search-input:focus, .search-input:not(:placeholder-shown) { 
-            width: 250px; padding-left: 14px; padding-right: 40px; cursor: text;
-            border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
-        }
-        .search-input:focus ~ .search-icon, .search-input:not(:placeholder-shown) ~ .search-icon {
-            color: var(--primary); transform: scale(1.1);
-        }
-        .search-input:focus::placeholder { color: var(--text-muted); }
-
-        .settings-btn {
-            width: 44px; display: flex; align-items: center; justify-content: center;
-            border: none; border-radius: 0 12px 12px 0; background: transparent;
-            color: var(--text-muted); cursor: pointer; transition: 0.2s; text-decoration: none;
-        }
-        .settings-btn:hover { color: var(--text); background: var(--bg-secondary); }
-
-        /* DROPDOWN MENU */
-        .account-dropdown {
-            position: absolute; top: calc(100% + 12px); left: 0; width: 100%;
-            background: var(--bg); border: 1px solid var(--border); border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15); z-index: 5000;
-            display: none; flex-direction: column; overflow: hidden;
-            animation: dropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            min-width: 200px;
-        }
-        .account-dropdown.open { display: flex; }
-        @keyframes dropdownFade { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        .dropdown-item {
-            padding: 10px 14px; display: flex; align-items: center; gap: 10px;
-            font-size: 0.85rem; color: var(--text); cursor: pointer; transition: 0.2s;
-        }
-        .dropdown-item:hover { background: var(--bg-secondary); }
-        .dropdown-item.active { background: var(--bg-tertiary); font-weight: 700; color: var(--primary); }
-
-        /* Repository Grid List Items */
-        #landingRepoList .project-card {
-            padding: 10px 14px;
-            gap: 10px;
-            border-radius: 10px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-        }
-        #landingRepoList .project-card:hover { border-color: var(--primary); transform: translateY(-2px); }
-        #landingRepoList .project-name { font-size: 0.875rem; font-weight: 700; margin-bottom: 2px; }
-        #landingRepoList .project-meta { font-size: 0.7rem; opacity: 0.6; }
-
-        /* FEATURES GRID */
-        .features-section { padding: 120px 24px; max-width: 1000px; margin: 0 auto; text-align: center; }
-        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 60px; }
-        .feature-card { 
-            text-align: left; padding: 40px 32px; background: var(--bg-secondary); 
-            border-radius: 24px; border: 1px solid var(--border); transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
-            position: relative; overflow: hidden;
-        }
-        .feature-card:hover { transform: translateY(-8px); border-color: var(--primary); box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
-        .feature-icon-wrapper {
-            width: 56px; height: 56px; background: var(--bg); 
-            border: 1px solid var(--border); border-radius: 16px; 
-            display: flex; align-items: center; justify-content: center; 
-            margin-bottom: 28px; position: relative; color: var(--primary);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        .feature-number {
-            position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; 
-            background: var(--primary); color: white; border-radius: 50%; 
-            display: flex; align-items: center; justify-content: center; 
-            font-size: 0.7rem; font-weight: 800; border: 3px solid var(--bg-secondary);
-        }
-        .feature-card h3 { font-size: 1.35rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.02em; color: var(--text); }
-        .feature-card p { font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; }
-
-        @media (max-width: 768px) {
-            .features-grid { grid-template-columns: 1fr; gap: 20px; }
-            .hero h1 { font-size: 3rem; }
-            .repo-controls { flex-direction: column; }
-        }
-
-        #cmsPreviewFrame { 
-            flex: 1; width: 100%; border: none; 
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            background: var(--bg);
-        }
-        #cmsPreviewFrame.view-mobile {
-            flex: none; width: 375px; height: 812px; border-radius: 36px;
-            box-shadow: 0 0 0 10px #18181b, 0 20px 40px rgba(0,0,0,0.2);
-            max-height: calc(100vh - 120px); margin: auto;
-        }
-        #cmsPreviewFrame.view-tablet {
-            flex: none; width: 768px; height: 1024px; border-radius: 24px;
-            box-shadow: 0 0 0 10px #18181b, 0 20px 40px rgba(0,0,0,0.2);
-            max-height: calc(100vh - 120px); margin: auto;
-        }
-        .cms-main-area {
-            flex:1; position:relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
-            transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .cms-main-area.drawer-left-open { padding-left: 340px; }
-        /* No padding-right shift for SEO anymore */
-        
-        /* SLATE TERMINAL OVERLAY */
-        .cms-terminal { 
-            position: fixed; bottom: 100px; right: 24px; left: auto;
-            width: 320px; background: #0f172a; backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
-            color: #cbd5e1; font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 12px; 
-            transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 10003;
-            display: flex; flex-direction: column; overflow: hidden; height: 40px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-            display: none;
-        }
-        .cms-terminal.visible { display: flex; }
-        .cms-terminal.hidden { display: none !important; }
-        
-        .preview-loader {
-            position: absolute; inset: 0; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; background: var(--bg);
-            z-index: 50; transition: 0.5s;
-        }
-        .loader-spinner {
-            width: 40px; height: 40px; border: 3px solid var(--sidebar-active);
-            border-top-color: var(--primary); border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 16px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .cms-terminal.expanded { width: 500px; height: 320px; }
-        .cms-terminal.maximized { width: calc(100% - 100px); height: calc(100% - 140px); }
-        .terminal-header { 
-            background: transparent; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; 
-            cursor: pointer; border-bottom: 1px solid var(--border); user-select: none;
-        }
-        .terminal-controls { display: flex; gap: 12px; }
-        .terminal-control { width: 12px; height: 12px; border-radius: 50%; background: var(--border); cursor: pointer; }
-        .terminal-control.green { background: #27c93f; }
-        .terminal-control.yellow { background: #ffbd2e; }
-        .terminal-control.red { background: #ff5f56; }
-        .terminal-body { flex: 1; padding: 12px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; color: #94a3b8; }
-        
-        /* PREMIUM SWITCH TOGGLE */
-        .switch {
-            position: relative; display: inline-block; width: 34px; height: 18px;
-        }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        
-        /* Publish Overlay (Zen Mode) */
-        .publish-overlay {
-            position: fixed; inset: 0; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            opacity: 0; pointer-events: none; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        [data-theme="dark"] .publish-overlay { background: rgba(15, 23, 42, 0.85); }
-        .publish-overlay.active { opacity: 1; pointer-events: all; }
-        
-        .publish-icon-box {
-            width: 100px; height: 100px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px; position: relative;
-            transform: scale(0.8); transition: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .publish-overlay.active .publish-icon-box { transform: scale(1); }
-        
-        .publish-text {
-            font-size: 2rem; font-weight: 800; color: var(--text); letter-spacing: -0.03em;
-            transform: translateY(20px); opacity: 0; transition: 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s; text-align: center;
-        }
-        .publish-overlay.active .publish-text { transform: translateY(0); opacity: 1; }
-        
-        .publish-subtext {
-            font-size: 1.1rem; color: var(--text-muted); margin-top: 10px; font-weight: 500;
-            transform: translateY(15px); opacity: 0; transition: 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s; text-align: center;
-        }
-        .publish-overlay.active .publish-subtext { transform: translateY(0); opacity: 1; }
-
-        .publish-icon-box.loading svg { animation: spin 1.5s linear infinite; stroke: var(--text-muted); }
-        .publish-icon-box.success { background: #10b981; color: white; border-color: #059669; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
-        .publish-icon-box.success svg { stroke: white; }
-
-        @keyframes checkmark-grow {
-            0% { transform: scale(0); opacity: 0; }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        .publish-icon-box.success svg path, .publish-icon-box.success svg polyline { animation: checkmark-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-        
-        /* JSON Era Card */
-        .json-card {
-            margin-top: 100px; padding: 80px 40px; border-radius: 32px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            text-align: center;
-            position: relative; overflow: hidden;
-        }
-        .json-card::after {
-            content: ''; position: absolute; top: 0; right: 0; width: 60%; height: 100%;
-            background: radial-gradient(circle at top right, rgba(124, 58, 237, 0.15), transparent 60%);
-            pointer-events: none;
-        }
-        .json-card::before {
-            content: ''; position: absolute; bottom: 0; left: 0; width: 60%; height: 100%;
-            background: radial-gradient(circle at bottom left, rgba(124, 58, 237, 0.1), transparent 60%);
-            pointer-events: none;
-        }
-        .json-card-pill {
-            display: inline-flex; align-items: center; gap: 10px; background: var(--bg); 
-            padding: 14px 28px; border-radius: 16px; border: 1px solid var(--border); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.03); font-weight: 600; color: var(--text);
-            transition: 0.2s; font-size: 0.95rem; z-index: 2; position: relative;
-            flex-shrink: 0;
-            white-space: nowrap;
-        }
-        .json-card-pill:hover {
-            transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 8px 20px rgba(124, 58, 237, 0.1);
-        }
-        
-        .dock-container {
-            position: absolute; cursor: pointer; inset: 0; background-color: var(--border);
-            transition: .3s; border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px;
-            background-color: white; transition: .3s; border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        input:checked + .slider { background-color: var(--primary); }
-        input:checked + .slider:before { transform: translateX(16px); }
-
-        .nav-arrow {
-            display: flex; align-items: center; justify-content: center;
-            width: 28px; height: 28px; border-radius: 8px; border: none;
-            background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s;
-        }
-        .nav-arrow:hover { background: var(--sidebar-active); color: var(--text); }
-        .nav-arrow.disabled { opacity: 0.25; cursor: default; pointer-events: none; }
-        .nav-arrow svg { width: 16px; height: 16px; }
-
-        /* HISTORY DRAWER */
-        #cmsHistoryDrawer {
-            position: fixed; left: 0; top: 0; bottom: 0; width: 340px;
-            background: var(--bg-secondary); border-right: 1px solid var(--border);
-            z-index: 10002; transform: translateX(-100%); transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex; flex-direction: column; padding: 24px;
-            box-shadow: 10px 0 30px rgba(0,0,0,0.1);
-            pointer-events: none; opacity: 0;
-        }
-        #cmsHistoryDrawer.open { transform: translateX(0); pointer-events: auto; opacity: 1; }
-
-        #cmsPageSettingsPanel {
-            bottom: 80px; left: 50%; transform: translateX(-50%); 
-            width: 420px; height: auto; background: var(--glass); 
-            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); 
-            border: 1px solid var(--border); border-radius: 20px; 
-            padding: 20px; display: none; flex-direction: column; gap: 16px; 
-            z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes modalFadeIn { 
-            from { opacity: 0; transform: translate(-50%, 20px); }
-            to { opacity: 1; transform: translate(-50%, 0); }
-        }
-
-        .settings-field {
-            display: flex; flex-direction: column; gap: 6px; margin-bottom: 0;
-        }
-        .settings-label {
-            font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-        }
-        .settings-input {
-            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem;
-        }
-        .settings-textarea {
-            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; resize: none;
-        }
-
-        .history-item { 
-            padding: 16px; background: var(--glass); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px;
-            display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; transition: transform 0.2s;
-            cursor: pointer;
-        }
-        .history-item:hover { transform: translateY(-2px); border-color: var(--primary); }
-        .history-item-label { font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .history-item-diff { 
-            padding: 12px; background: rgba(0,0,0,0.05); border-radius: 8px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;
-            display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--border);
-        }
-        .diff-old { padding: 4px 8px; border-radius: 4px; background: #ffe3e3; text-decoration: line-through; color: #c92a2a; border: 1px solid #ffa8a8; font-weight: 500; }
-        .diff-new { padding: 4px 8px; border-radius: 4px; background: #d3f9d8; font-weight: 700; color: #2b8a3e; border: 1px solid #8ce99a; }
-        .history-item-selector { font-family: monospace; opacity: 0.4; font-size: 0.6rem; margin-top: 4px; cursor: help; }
-        .btn-undo { 
-            align-self: flex-end; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); 
-            background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.75rem; 
-            font-weight: 600; transition: 0.2s; display: flex; align-items: center; gap: 4px;
-        }
-        .btn-undo:hover { background: var(--bg-tertiary); border-color: var(--primary); color: var(--primary); }
-        .btn-undo:hover { background: var(--primary); color: white; }
-        
-        .toast { 
-            position: fixed; bottom: 2rem; right: 2rem; padding: 12px 24px; border-radius: 12px; font-size: 0.875rem; 
-            font-weight: 600; color: #fff; z-index: 30000; opacity: 0; transform: translateY(10px); transition: 0.3s; pointer-events: none;
-        }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.info { background: var(--primary); box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3); }
-        .toast.success { background: #10b981; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3); }
-        .toast.error { background: #ef4444; box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3); }
-
-        /* SPONSORS */
-        .sponsors-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; opacity: 0.4; filter: grayscale(1); transition: 0.3s; }
-        .sponsors-grid:hover { opacity: 0.8; filter: grayscale(0); }
-        .sponsor-logo { font-weight: 700; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
-
-        .hidden { display: none !important; }
-        .loader { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; margin: 20px auto; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
 </head>
 <body>
-    <header style="position:relative;">
-        <div class="logo">
-            <div class="logo-box">
-                <svg viewBox="0 0 76 76" fill="none">
-                    <path d="M3 17C3 9.26801 9.26801 3 17 3H59C66.732 3 73 9.26801 73 17V59C73 66.732 66.732 73 59 73H17C9.26801 73 3 66.732 3 59V17Z" fill="var(--primary)" fill-opacity="0.07"/>
-                    <path d="M11.543 69.126C13.1641 70.0019 15.0202 70.5 17 70.5H23.6113V75.5H17C14.1699 75.5 11.4992 74.785 9.16602 73.5244L11.543 69.126ZM44.6113 70.5V75.5H31.3887V70.5H44.6113ZM66.834 73.5244C64.5008 74.785 61.8301 75.5 59 75.5H52.3887V70.5H59C60.9798 70.5 62.8359 70.0019 64.457 69.126L66.834 73.5244ZM0.5 59V52.3887H5.5V59C5.5 60.9798 5.99813 62.8359 6.87402 64.457L2.47559 66.834C1.21496 64.5008 0.5 61.8301 0.5 59ZM70.5 59V52.3887H75.5V59C75.5 61.8301 74.785 64.5008 73.5244 66.834L69.126 64.457C70.0019 62.8359 70.5 60.9798 70.5 59ZM5.5 31.3887V44.6113H0.5V31.3887H5.5ZM75.5 31.3887V44.6113H70.5V31.3887H75.5ZM0.5 17C0.5 14.1699 1.21496 11.4992 2.47559 9.16602L6.87402 11.543C5.99813 13.1641 5.5 15.0202 5.5 17V23.6113H0.5V17ZM70.5 17C70.5 15.0202 70.0019 13.1641 69.126 11.543L73.5244 9.16602C74.785 11.4992 75.5 14.1699 75.5 17V23.6113H70.5V17ZM23.6113 0.5V5.5H17C15.0202 5.5 13.1641 5.99813 11.543 6.87402L9.16602 2.47559C11.4992 1.21496 14.1699 0.5 17 0.5H23.6113ZM59 0.5C61.8301 0.5 64.5008 1.21496 66.834 2.47559L64.457 6.87402C62.8359 5.99813 60.9798 5.5 59 5.5H52.3887V0.5H59ZM44.6113 0.5V5.5H31.3887V0.5H44.6113Z" fill="var(--primary)" fill-opacity="0.9"/>
-                    <path d="M37.552 61.336C34.5867 61.336 32.1013 60.664 30.096 59.32C28.0907 57.976 26.4907 56.184 25.296 53.944C24.1227 51.6827 23.28 49.1867 22.768 46.456C22.256 43.7253 22 40.9627 22 38.168C22 36.2267 22.1387 34.1893 22.416 32.056C22.6933 29.9227 23.1733 27.8533 23.856 25.848C24.5387 23.8213 25.4667 21.9973 26.64 20.376C27.8347 18.7333 29.328 17.432 31.12 16.472C32.912 15.4907 35.056 15 37.552 15C40.5387 15 43.0347 15.6827 45.04 17.048C47.0453 18.392 48.6347 20.1947 49.808 22.456C51.0027 24.7173 51.856 27.2133 52.368 29.944C52.88 32.6747 53.136 35.416 53.136 38.168C53.136 40.1307 52.9867 42.1787 52.688 44.312C52.4107 46.424 51.9307 48.4933 51.248 50.52C50.5653 52.5253 49.6267 54.3493 48.432 55.992C47.2373 57.6347 45.744 58.936 43.952 59.896C42.1813 60.856 40.048 61.336 37.552 61.336ZM37.552 56.504C39.664 56.504 41.3707 55.9493 42.672 54.84C43.9947 53.7093 45.0187 52.2267 45.744 50.392C46.4693 48.5573 46.96 46.5733 47.216 44.44C47.4933 42.2853 47.632 40.1947 47.632 38.168C47.632 35.928 47.472 33.72 47.152 31.544C46.8533 29.368 46.3307 27.4053 45.584 25.656C44.8587 23.8853 43.8347 22.4667 42.512 21.4C41.2107 20.3333 39.5573 19.8 37.552 19.8C35.4613 19.8 33.744 20.376 32.4 21.528C31.056 22.6587 30.0213 24.1413 29.296 25.976C28.592 27.8107 28.1013 29.8053 27.824 31.96C27.5467 34.0933 27.408 36.1627 27.408 38.168C27.408 40.4293 27.5573 42.648 27.856 44.824C28.1547 47 28.6773 48.9733 29.424 50.744C30.1707 52.4933 31.2053 53.8907 32.528 54.936C33.8507 55.9813 35.5253 56.504 37.552 56.504ZM37.552 42.36C36.3787 42.36 35.3973 41.944 34.608 41.112C33.8187 40.2587 33.424 39.288 33.424 38.2C33.424 37.1333 33.8187 36.184 34.608 35.352C35.3973 34.4987 36.3787 34.072 37.552 34.072C38.7467 34.072 39.7387 34.4987 40.528 35.352C41.3173 36.184 41.712 37.1333 41.712 38.2C41.712 39.288 41.3173 40.2587 40.528 41.112C39.7387 41.944 38.7467 42.36 37.552 42.36Z" fill="var(--text)"/>
-                </svg>
+    <div id="landing">
+        <header>
+            <a href="/" class="logo">
+                <div class="logo-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                </div>
+                <span class="logo-text" style="display:block; font-weight:800; font-size:1.4rem; letter-spacing:-0.03em;">0cms</span>
+            </a>
+            <nav id="landingNav" class="hidden">
+                <ul>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#docs">Docs</a></li>
+                    <li><a href="https://github.com/0cms/0cms" target="_blank">GitHub</a></li>
+                </ul>
+            </nav>
+            <div id="landingLoginBtn">
+                <button class="btn-toggle" onclick="window.location.href='/login'">Sign In</button>
             </div>
-        </div>
-        
-        <nav>
-            <ul>
-                <li><a href="https://github.com/megawron/0cms-core" target="_blank" style="display:flex; align-items:center; gap:8px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
-                    GitHub
-                </a></li>
-            </ul>
-        </nav>
-    </header>
+            <div id="cmsLandingProject" style="display:none;">
+                <div class="url-chip">
+                    <div class="status-dot"></div>
+                    <span id="activeProjectName">No project selected</span>
+                </div>
+                <button class="btn-toggle" onclick="toggleDashboard(true)">Open Dashboard</button>
+            </div>
+        </header>
 
-    <main>
-        <section class="hero">
-            <div class="logo-display-card">
-                <div class="logo">
-                    <div class="logo-box">
-                        <svg viewBox="0 0 76 76" fill="none">
-                            <path d="M3 17C3 9.26801 9.26801 3 17 3H59C66.732 3 73 9.26801 73 17V59C73 66.732 66.732 73 59 73H17C9.26801 73 3 66.732 3 59V17Z" fill="var(--primary)" fill-opacity="0.07"/>
-                            <path d="M11.543 69.126C13.1641 70.0019 15.0202 70.5 17 70.5H23.6113V75.5H17C14.1699 75.5 11.4992 74.785 9.16602 73.5244L11.543 69.126ZM44.6113 70.5V75.5H31.3887V70.5H44.6113ZM66.834 73.5244C64.5008 74.785 61.8301 75.5 59 75.5H52.3887V70.5H59C60.9798 70.5 62.8359 70.0019 64.457 69.126L66.834 73.5244ZM0.5 59V52.3887H5.5V59C5.5 60.9798 5.99813 62.8359 6.87402 64.457L2.47559 66.834C1.21496 64.5008 0.5 61.8301 0.5 59ZM70.5 59V52.3887H75.5V59C75.5 61.8301 74.785 64.5008 73.5244 66.834L69.126 64.457C70.0019 62.8359 70.5 60.9798 70.5 59ZM5.5 31.3887V44.6113H0.5V31.3887H5.5ZM75.5 31.3887V44.6113H70.5V31.3887H75.5ZM0.5 17C0.5 14.1699 1.21496 11.4992 2.47559 9.16602L6.87402 11.543C5.99813 13.1641 5.5 15.0202 5.5 17V23.6113H0.5V17ZM70.5 17C70.5 15.0202 70.0019 13.1641 69.126 11.543L73.5244 9.16602C74.785 11.4992 75.5 14.1699 75.5 17V23.6113H70.5V17ZM23.6113 0.5V5.5H17C15.0202 5.5 13.1641 5.99813 11.543 6.87402L9.16602 2.47559C11.4992 1.21496 14.1699 0.5 17 0.5H23.6113ZM59 0.5C61.8301 0.5 64.5008 1.21496 66.834 2.47559L64.457 6.87402C62.8359 5.99813 60.9798 5.5 59 5.5H52.3887V0.5H59ZM44.6113 0.5V5.5H31.3887V0.5H44.6113Z" fill="var(--primary)" fill-opacity="0.9"/>
-                            <path d="M37.552 61.336C34.5867 61.336 32.1013 60.664 30.096 59.32C28.0907 57.976 26.4907 56.184 25.296 53.944C24.1227 51.6827 23.28 49.1867 22.768 46.456C22.256 43.7253 22 40.9627 22 38.168C22 36.2267 22.1387 34.1893 22.416 32.056C22.6933 29.9227 23.1733 27.8533 23.856 25.848C24.5387 23.8213 25.4667 21.9973 26.64 20.376C27.8347 18.7333 29.328 17.432 31.12 16.472C32.912 15.4907 35.056 15 37.552 15C40.5387 15 43.0347 15.6827 45.04 17.048C47.0453 18.392 48.6347 20.1947 49.808 22.456C51.0027 24.7173 51.856 27.2133 52.368 29.944C52.88 32.6747 53.136 35.416 53.136 38.168C53.136 40.1307 52.9867 42.1787 52.688 44.312C52.4107 46.424 51.9307 48.4933 51.248 50.52C50.5653 52.5253 49.6267 54.3493 48.432 55.992C47.2373 57.6347 45.744 58.936 43.952 59.896C42.1813 60.856 40.048 61.336 37.552 61.336ZM37.552 56.504C39.664 56.504 41.3707 55.9493 42.672 54.84C43.9947 53.7093 45.0187 52.2267 45.744 50.392C46.4693 48.5573 46.96 46.5733 47.216 44.44C47.4933 42.2853 47.632 40.1947 47.632 38.168C47.632 35.928 47.472 33.72 47.152 31.544C46.8533 29.368 46.3307 27.4053 45.584 25.656C44.8587 23.8853 43.8347 22.4667 42.512 21.4C41.2107 20.3333 39.5573 19.8 37.552 19.8C35.4613 19.8 33.744 20.376 32.4 21.528C31.056 22.6587 30.0213 24.1413 29.296 25.976C28.592 27.8107 28.1013 29.8053 27.824 31.96C27.5467 34.0933 27.408 36.1627 27.408 38.168C27.408 40.4293 27.5573 42.648 27.856 44.824C28.1547 47 28.6773 48.9733 29.424 50.744C30.1707 52.4933 31.2053 53.8907 32.528 54.936C33.8507 55.9813 35.5253 56.504 37.552 56.504ZM37.552 42.36C36.3787 42.36 35.3973 41.944 34.608 41.112C33.8187 40.2587 33.424 39.288 33.424 38.2C33.424 37.1333 33.8187 36.184 34.608 35.352C35.3973 34.4987 36.3787 34.072 37.552 34.072C38.7467 34.072 39.7387 34.4987 40.528 35.352C41.3173 36.184 41.712 37.1333 41.712 38.2C41.712 39.288 41.3173 40.2587 40.528 41.112C39.7387 41.944 38.7467 42.36 37.552 42.36Z" fill="var(--text)"/>
-                        </svg>
+        <main>
+            <section class="hero">
+                <div class="logo-display-card">
+                    <div class="logo">
+                        <div class="logo-box">
+                             <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                        </div>
+                        <span class="logo-text" style="display:block; font-weight:900; font-size:2.8rem; letter-spacing:-0.05em;">0cms</span>
                     </div>
                 </div>
-            </div>
-            <h1>Zero Config.<br>Zero Friction.</h1>
-            <p class="teaser">The fastest way to edit your Jamstack site. No setup, no database, no friction. Just open and edit.</p>
-            
-            <div id="heroAuthAction">
-                <button class="hero-cta hero-cta-primary" id="landingLoginBtn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
-                    Connect with GitHub
-                </button>
-
-                <button class="hero-cta btn-cms-outline" id="landingDemoBtn" style="border: 2px solid var(--border); padding: 14px 32px; height: auto;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Try Live Demo
-                </button>
-
-                <div id="cmsLandingProject" class="project-card" style="margin: 0 auto; text-align: left;">
-                    <div style="flex: 1;">
-                        <div class="project-name" id="landingRepoName">No repository selected</div>
-                        <div class="project-meta">Most recent project</div>
-                    </div>
-                    <button class="btn-toggle" id="toggleCmsBtnLanding" style="background:var(--primary); color:white; border:none; margin-left:12px; position:relative; overflow:hidden; display:flex; align-items:center; gap:8px;">
-                        <span>Open Dashboard</span>
-                        <div id="prewarmLoader" class="prewarm-loading" style="display:none;"></div>
+                <h1>Zero Config. <span style="color:var(--primary)">Zero Friction.</span></h1>
+                <p class="teaser">The visual editor for every Jamstack framework. Decoupled, modular, and directly connected to your Git.</p>
+                
+                <div id="heroAuthAction">
+                    <button id="landingDemoBtn" class="hero-cta hero-cta-primary" onclick="startDemo()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Try Live Demo
                     </button>
                 </div>
-            </div>
-        </section>
 
-        <section id="landingRepoSection" class="content-section" style="max-width: 1000px; margin: 0 auto 6rem; padding: 0 2rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem;">
-                <h2 style="font-size: 1.8rem; margin:0">Your Projects</h2>
-                
-                <div class="repo-controls" style="margin-bottom: 0; min-width: 500px;">
-                    <div class="search-container">
-                        <input type="text" id="repoSearchInput" class="search-input" placeholder="Search...">
-                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    </div>
-
-                    <div class="account-switcher-group">
-                        <div class="account-switcher" id="accountSwitcherBtn">
-                            <img id="selectedAccountAvatar" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9IiMzMzMiIHJ4PSI2Ii8+PC9zdmc+" class="account-avatar">
-                            <span id="selectedAccountName" class="account-name">Connect GitHub</span>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="chevron" style="margin-left:8px; opacity:0.5;"><polyline points="8 15 12 19 16 15"></polyline><polyline points="8 9 12 5 16 9"></polyline></svg>
+                <div id="landingRepoSection" style="margin-top: 4rem;">
+                    <div class="repo-controls">
+                        <div class="account-switcher-group">
+                            <button id="accountSwitcher" class="account-switcher">
+                                <img id="accountAvatar" src="" class="account-avatar" style="display:none;">
+                                <span id="accountName" class="account-name">Loading...</span>
+                                <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="account-switcher-divider"></div>
+                            <a href="/login" class="settings-btn" title="Account Settings">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                            </a>
+                            <div id="accountDropdown" class="account-dropdown"></div>
                         </div>
-                        <div class="account-switcher-divider"></div>
-                        <a id="ghAppSettingsLink" href="https://github.com/settings/installations" target="_blank" class="settings-btn" title="GitHub App Settings">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        </a>
-                        <div id="accountDropdown" class="account-dropdown"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="landingRepoList" class="features-grid" style="margin-top: 0; gap: 24px;">
-                <!-- Populated by JS -->
-            </div>
-        </section>
-
-        <section class="content-section" style="padding-top: 0;">
-            <div class="features-section">
-                <h2>Simplicity by Design</h2>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-number">1</div>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+                        <div class="search-container">
+                            <input type="text" id="repoSearch" class="search-input" placeholder="Search repositories...">
+                            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                         </div>
-                        <h3>Connect</h3>
-                        <p>Link your GitHub repository. 0CMS handles the setup automatically through our secure proxy.</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-number">2</div>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                        </div>
-                        <h3>Edit</h3>
-                        <p>Modify content visually with the Zen Editor. What you see is exactly what you get, in real-time.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-number">3</div>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        </div>
-                        <h3>Publish</h3>
-                        <p>Push changes back to GitHub. Fast, secure, and instant global publishing with one click.</p>
-                    </div>
-                </div>
-            </div>
-
-            <section class="json-card">
-                <div style="position: relative; z-index: 2;">
-                    <div style="display:inline-flex; align-items:center; gap:8px; padding: 6px 16px; background: rgba(124, 58, 237, 0.1); border-radius: 20px; color: var(--primary); font-size: 0.85rem; font-weight: 700; margin-bottom: 24px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                        Convention Over Configuration
-                    </div>
-                    <h2 style="margin-bottom: 20px; font-size: 2.5rem; letter-spacing: -0.02em;">The Era of JSON is Over</h2>
-                    <p style="max-width: 650px; margin: 0 auto 40px; font-size: 1.1rem; line-height: 1.6; color: var(--text-muted);">
-                        Say goodbye to complex configuration files and rigid schemas. ZeroCMS intelligently infers your content framework directly from your active code. Simply connect your repository, and it builds a dynamic visual editor instantly.
-                    </p>
-                    <div style="display: flex; justify-content: center; gap: 24px; align-items: center; flex-wrap: wrap;">
-                        <div class="json-card-pill">
-                            <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            </div>
-                            Zero Config
-                        </div>
-                        <div class="json-card-pill">
-                            <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            </div>
-                            No Database
-                        </div>
-                        <div class="json-card-pill">
-                            <div style="background:var(--primary); color:white; width: 20px; height: 20px; display:flex; align-items:center; justify-content:center; border-radius:50%;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            </div>
-                            Bring Your Own Framework
+                    <div id="landingRepoList" class="features-grid">
+                        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.9rem;">
+                            <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
+                            Fetching your repositories...
                         </div>
                     </div>
                 </div>
             </section>
+        </main>
+    </div>
 
-            <section style="margin-top: 120px; text-align: center;">
-                <div class="sidebar-label" style="margin-bottom: 20px;">Supported By</div>
-                <div class="sponsors-grid">
-                    <div class="sponsor-logo">Acme Corp</div>
-                    <div class="sponsor-logo">Globex</div>
-                    <div class="sponsor-logo">Soylent</div>
-                    <div class="sponsor-logo">Initech</div>
-                    <div class="sponsor-logo">Umbrella</div>
-                </div>
-            </section>
-        </section>
-    </main>
-
-    <footer>
-        <p>&copy; 2026 0cms. Built for the modern web.</p>
-    </footer>
-
-    <!-- QUANTUM DASHBOARD OVERLAY -->
+    <!-- DASHBOARD OVERLAY -->
     <div id="cmsDashboard">
-        <div class="cms-demo-shell-badge">Live Demo Mode</div>
-        <div class="dashboard-main">
-            <div id="previewLoader" class="preview-loader">
-                <div class="loader-spinner"></div>
-                <div id="cmsLoaderStatus" style="font-weight:600; color:var(--text); font-size:0.9rem; margin-top:16px; letter-spacing:-0.01em;">Initializing 0cms...</div>
-            </div>
-            
-            <div class="hud-container">
-                <div id="demoCoachMark" class="demo-coach-mark">
-                    See your changes here! 💡
+        <aside id="cmsHistoryDrawer">
+            <div style="padding: 24px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <h4 style="font-size: 0.9rem; font-weight: 800; letter-spacing: -0.02em;">DRAFTS</h4>
+                <div style="display:flex; gap:4px;">
+                    <button id="navBack" class="nav-arrow disabled" title="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+                    <button id="navForward" class="nav-arrow disabled" title="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>
                 </div>
-                <div class="command-pill">
-                    <div class="url-chip">
-                        <span id="cmsStatusDot" class="status-dot off"></span>
-                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Connecting engine...</span>
-                        <div id="demoBadge" style="display:none; margin-left:8px; padding:2px 6px; background:var(--primary); color:white; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:0.05em;">DEMO</div>
-                    </div>
-                    
-                    <div class="dock-divider"></div>
-                    
-                    <div style="display:flex; gap:2px; padding: 0 4px;">
-                        <button class="dock-item icon-only" id="navBack" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
-                        <button class="dock-item icon-only" id="navForward" title="Forward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></button>
-                    </div>
-                    
-                    <div class="dock-divider"></div>
+            </div>
+            <div id="historyList" style="flex:1; overflow-y:auto; padding:12px;"></div>
+            <div style="padding: 20px; border-top: 1px solid var(--border); background: var(--bg-secondary);">
+                <button id="btnPublish" class="btn-primary" style="width:100%; justify-content:center; gap:8px; height:42px; font-weight:700;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
+                    Publish Changes
+                </button>
+                <button id="btnExtractMode" class="btn-secondary" style="width:100%; justify-content:center; gap:8px; margin-top:8px; border: 1px dashed var(--primary); color: var(--primary); background: transparent; padding: 10px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Extract Component
+                </button>
+            </div>
+        </aside>
 
-                    <div style="display:flex; gap:2px; padding: 0 4px;">
-                        <button class="dock-item icon-only active" id="viewDesktop" title="Desktop View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></button>
-                        <button class="dock-item icon-only" id="viewTablet" title="Tablet View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
-                        <button class="dock-item icon-only" id="viewMobile" title="Mobile View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
+        <section class="cms-main-area" id="cmsMainArea">
+            <header style="background:var(--bg); border-bottom:1px solid var(--border); padding:0 24px; height:60px;">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <button class="nav-arrow" onclick="toggleDashboard(false)" title="Back to Projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+                    <div id="previewUrlDisplay" style="font-size:0.85rem; font-weight:600; opacity:0.6; font-family:'JetBrains Mono', monospace;">Initializing...</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="viewport-controls" style="display:flex; background:var(--bg-secondary); padding:4px; border-radius:10px; gap:4px;">
+                        <button id="viewDesktop" class="dock-item icon-only active" onclick="updateViewport('desktop')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></button>
+                        <button id="viewTablet" class="dock-item icon-only" onclick="updateViewport('tablet')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
+                        <button id="viewMobile" class="dock-item icon-only" onclick="updateViewport('mobile')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></button>
                     </div>
-                    
                     <div class="dock-divider"></div>
-                    
-                    <button class="dock-item" id="navSEO" title="Manage SEO Settings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><circle cx="10" cy="10" r="3"/></svg>
+                    <button class="btn-cms btn-cms-outline" onclick="document.getElementById('cmsPageSettingsPanel').style.display='block'" style="gap:8px; border-radius:10px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                         SEO
                     </button>
-
-                    <button class="btn-cms btn-cms-primary" id="cmsSaveBtn" style="display:none; margin-left:8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        Publish
-                    </button>
                 </div>
+            </header>
 
-                <button class="dock-item icon-only exit-item" id="btnCloseCms" title="Exit Visual Editor">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+            <div style="flex:1; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                <div id="previewLoader" class="preview-loader"><div class="loader-spinner"></div><p id="loaderMessage">Booting Engine...</p></div>
+                <iframe id="cmsPreviewFrame"></iframe>
             </div>
-            <div id="cmsActiveRepo" style="position: absolute; top: 28px; right: 24px; font-size: 0.7rem; color: var(--text-muted); font-weight: 500; opacity: 0.6;"></div>
 
-            <div class="cms-main-area">
-                <div id="cmsHistoryDrawer">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <h3 style="font-size:1rem; margin:0">Unsaved Changes</h3>
-                            <div id="cmsHistoryCount" style="font-size:0.7rem; background:var(--bg-tertiary); padding:2px 6px; border-radius:100px;">0</div>
-                        </div>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="toggleHistory(false)">✕</button>
+            <!-- TERMINAL FLOATING -->
+            <div id="cmsTerminal" class="cms-terminal">
+                <div class="terminal-header" onclick="toggleTerminal()">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27c93f" stroke-width="2.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                        <span>Build Engine</span>
                     </div>
-                    <div id="cmsHistoryList" style="flex:1; overflow-y:auto;">
-                        <div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>
+                    <div class="terminal-controls">
+                        <div class="terminal-control yellow" onclick="event.stopPropagation(); maximizeTerminal()"></div>
+                        <div class="terminal-control red" onclick="event.stopPropagation(); document.getElementById('cmsTerminal').classList.remove('visible')"></div>
                     </div>
                 </div>
-                <iframe id="cmsPreviewFrame" src="about:blank" allow="cross-origin-isolated"></iframe>
-                
+                <div id="terminalBody" class="terminal-body"></div>
+            </div>
 
+            <!-- COMPONENT EXTRACTION PANEL -->
+            <div id="cmsExtractPanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--primary); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+                <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path></svg> Extract Component</span>
+                    <button style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem; border:none; cursor:pointer;" onclick="toggleExtractMode(false)">✕</button>
+                </div>
+                <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">Select any element in the preview to extract its HTML and <strong>computed CSS</strong>.</p>
+                <input type="text" id="extractComponentName" placeholder="Component Name (e.g. MyNavbar)" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:10px; color:var(--text); font-size:0.85rem;">
+                <button id="btnConfirmExtract" class="btn-primary" style="width:100%; border-radius:8px; font-size:0.85rem; padding:10px 0;">Extract & Save</button>
+            </div>
 
-                <div id="demoWelcomeCard" class="demo-welcome-card">
+            <!-- PAGE SETTINGS (SEO) -->
+            <div id="cmsPageSettingsPanel" class="cms-terminal" style="bottom: 80px; right: 24px; width: 320px; height: auto; background: var(--glass); backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001;">
+                <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="display:flex; align-items:center; gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> Page Settings</span>
+                    <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsPageSettingsPanel').style.display='none'">✕</button>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">SEO TITLE</label>
+                        <input type="text" id="seoTitle" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font-size:0.8rem;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">META DESCRIPTION</label>
+                        <textarea id="seoDesc" rows="3" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font-size:0.8rem;"></textarea>
+                    </div>
+                    <button class="btn-cms btn-cms-primary" id="seoSaveBtn" style="margin-top:8px; font-size:0.8rem; justify-content:center;">Update Data</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- DEMO WELCOME CARD -->
+    <div id="demoWelcomeCard" class="demo-welcome-card">
         <div class="demo-welcome-header">
             <div class="demo-welcome-icon">✨</div>
             <h3>Welcome to 0CMS Demo</h3>
@@ -1131,84 +248,16 @@
         <button style="margin-top: 16px;" onclick="document.getElementById('demoWelcomeCard').style.display='none'">Got it, let's edit!</button>
     </div>
 
-    <!-- TOAST NOTIFICATIONS -->
-                <div id="cmsCreatePanel" class="cms-terminal" style="bottom: 80px; left: 50%; transform: translateX(-50%); width: 340px; height: auto; background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 16px; z-index: 10001; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
-                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg> Create Content</span>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsCreatePanel').style.display='none'">✕</button>
-                    </div>
-                    <div id="cmsCreateLoader" style="color:var(--text-muted); font-size:0.8rem; text-align:center;">Scanning content schemas...</div>
-                    <div id="cmsCreateList" style="display:flex; flex-direction:column; gap:8px;"></div>
-                </div>
-
-                <!-- PAGE SETTINGS FLOATING PANEL (ZERO-SAVE) -->
-                <div id="cmsPageSettingsPanel" class="cms-terminal">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <span style="font-weight: 700; font-size: 0.95rem; color: var(--text); display: flex; align-items:center; gap:8px;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> 
-                            Page Settings
-                        </span>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="document.getElementById('cmsPageSettingsPanel').style.display='none'">✕</button>
-                    </div>
-
-                    <div style="display:flex; flex-direction:column; gap:16px;">
-                        <div class="settings-field">
-                            <label class="settings-label">SEO Title</label>
-                            <input type="text" id="seoTitle" class="settings-input" placeholder="Page Title">
-                        </div>
-                        
-                        <div class="settings-field">
-                            <label class="settings-label">Meta Description</label>
-                            <textarea id="seoDesc" rows="3" class="settings-textarea" placeholder="Brief summary..."></textarea>
-                        </div>
-
-                        <div class="settings-field">
-                            <label class="settings-label" style="display:flex; justify-content:space-between;">
-                                Social Image
-                                <a href="#" onclick="showToast('Browse coming soon!', 'info'); return false;" style="font-size:0.65rem; color:var(--primary);">Browse...</a>
-                            </label>
-                            <input type="text" id="seoImage" class="settings-input" placeholder="/path/to/image.jpg">
-                        </div>
-                        
-                        <button class="btn-cms btn-cms-primary" id="seoSaveBtn" style="margin-top:8px; display:none;">Save SEO</button>
-
-                    </div>
-                </div>
-
-
-                
-                <div id="cmsStepLogin" class="onboarding-screen">
-                    <div class="onboarding-card">
-                        <div style="margin-bottom: 24px;">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
-                        </div>
-                        <h2>Connect to GitHub</h2>
-                        <p>Sign in to your GitHub account to access and edit your repositories directly.</p>
-                        <button class="btn-cms btn-cms-primary" id="cmsLoginBtn" style="padding: 12px 30px; font-size: 1rem;">Continue with GitHub</button>
-                    </div>
-                </div>
-
-                <div id="cmsStepPicker" class="onboarding-screen hidden">
-                    <div class="onboarding-card" style="max-width: 600px; width: 100%; padding: 32px;">
-
-                        <div id="cmsRepoList" class="repo-list" style="max-height: 340px;">
-                            <div id="cmsRepoLoader" class="loader"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <!-- ZEN PUBLISH OVERLAY -->
+    <div id="publishOverlay" class="publish-overlay">
+        <div id="publishIconBox" class="publish-icon-box loading">
+            <svg id="publishSpinner" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+            <svg id="publishCheck" style="display:none;" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
-        <!-- ZEN PUBLISH OVERLAY -->
-        <div id="publishOverlay" class="publish-overlay">
-            <div id="publishIconBox" class="publish-icon-box loading">
-                <svg id="publishSpinner" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-                <svg id="publishCheck" style="display:none;" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </div>
-            <div id="publishText" class="publish-text">Publishing changes...</div>
-            <div id="publishSubtext" class="publish-subtext">Pushing securely to GitHub</div>
-        </div>
+        <div id="publishText" class="publish-text">Publishing changes...</div>
+        <div id="publishSubtext" class="publish-subtext">Pushing securely to GitHub</div>
     </div>
-    
+
     <div class="toast" id="cmsToast"></div>
     <script type="module" src="/app.js"></script>
 </body>

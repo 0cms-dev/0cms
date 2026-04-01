@@ -90,6 +90,14 @@ class ZeroConfigCMS {
         if (e.data.type === 'CMS_HIGHLIGHT') {
             this.highlight(e.data.selector);
         }
+        
+        // EXTRACTION MODE
+        if (e.data.type === 'CMS_EXTRACT_MODE') {
+            this.toggleExtractMode(e.data.enabled);
+        }
+        if (e.data.type === 'CMS_EXTRACT_TRIGGER') {
+            this.captureComponent(e.data.name);
+        }
       });
       // Initial notification of existing changes
       this.notifyParent();
@@ -297,6 +305,13 @@ class ZeroConfigCMS {
         z-index: 10001 !important;
         position: relative !important;
       }
+      
+      .cms-extract-highlight {
+        outline: 2px solid var(--primary, #7c3aed) !important;
+        outline-offset: 2px !important;
+        background: rgba(124, 58, 237, 0.1) !important;
+        cursor: crosshair !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -439,6 +454,78 @@ class ZeroConfigCMS {
     const target = el.tagName === 'IMG' ? el.parentElement : el;
     const isEdited = this.changes[selector] !== undefined;
     target.classList.toggle('cms-edited', isEdited);
+  }
+
+  // --- EXTRACTION MODE LOGIC ---
+  toggleExtractMode(enabled) {
+    this.extractMode = enabled;
+    if (enabled) {
+      document.body.style.cursor = 'crosshair';
+      this._extractMouseHandler = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (this._lastExtracted) this._lastExtracted.classList.remove('cms-extract-highlight');
+        this._lastExtracted = e.target;
+        this._lastExtracted.classList.add('cms-extract-highlight');
+      };
+      this._extractClickHandler = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        // Just highlight - saving is triggered by the parent trigger message
+      };
+      document.addEventListener('mouseover', this._extractMouseHandler);
+      document.addEventListener('click', this._extractClickHandler, true);
+    } else {
+      document.body.style.cursor = '';
+      if (this._lastExtracted) this._lastExtracted.classList.remove('cms-extract-highlight');
+      document.removeEventListener('mouseover', this._extractMouseHandler);
+      document.removeEventListener('click', this._extractClickHandler, true);
+    }
+  }
+
+  captureComponent(name) {
+    if (!this._lastExtracted) return;
+    const el = this._lastExtracted;
+    el.classList.remove('cms-extract-highlight');
+    
+    const html = el.outerHTML;
+    const css = this.gatherStyles(el);
+    
+    window.parent.postMessage({
+      type: 'CMS_COMPONENT_DATA',
+      name, html, css
+    }, '*');
+  }
+
+  gatherStyles(element) {
+    let styles = '';
+    const processedRules = new Set();
+    const elements = [element, ...element.querySelectorAll('*')];
+    
+    // Scan all stylesheets for matching rules
+    try {
+      for (const sheet of document.styleSheets) {
+        try {
+          const rules = sheet.cssRules || sheet.rules;
+          if (!rules) continue;
+          
+          for (const rule of rules) {
+            if (rule.type !== 1) continue; // Only process standard style rules
+            
+            for (const el of elements) {
+              if (el.matches && el.matches(rule.selectorText)) {
+                if (!processedRules.has(rule.cssText)) {
+                   styles += rule.cssText + '\n';
+                   processedRules.add(rule.cssText);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore cross-origin stylesheet errors
+        }
+      }
+    } catch (e) {}
+    
+    return styles;
   }
 
   undo() {
