@@ -130,6 +130,10 @@ class ZeroCMS {
     if (normContent === normOriginal) {
         delete this.changes[selector];
         this.historyStack = this.historyStack.filter(e => e.selector !== selector);
+        
+        const el = document.querySelector(selector);
+        if (el) el.classList.remove('cms-modified');
+
         this.broadcast();
         return;
     }
@@ -143,6 +147,11 @@ class ZeroCMS {
     
     this.changes[selector] = content;
     this.historyStack.push(entry);
+    
+    // Visual indicator for modified state
+    const el = document.querySelector(selector);
+    if (el) el.classList.add('cms-modified');
+
     this.broadcast();
   }
 
@@ -220,9 +229,15 @@ class ZeroCMS {
       if (!el.dataset.cmsOriginal) {
           el.dataset.cmsOriginal = el.innerText;
       }
+      
+      const selector = this.getSelector(el);
+      if (this.changes[selector] && this.changes[selector] !== el.dataset.cmsOriginal) {
+          el.classList.add('cms-modified');
+      }
+
       el.classList.add('cms-editable');
       el.contentEditable = 'true';
-      el.onblur = () => this.saveChange(this.getSelector(el), el.innerText, el.dataset.cmsOriginal);
+      el.onblur = () => this.saveChange(selector, el.innerText, el.dataset.cmsOriginal);
       count++;
     }
     console.log(`%c[0cms] %cEditor Active. Found ${count} editable elements.`, 'color:#7c3aed; font-weight:bold;', 'color:inherit;');
@@ -233,9 +248,11 @@ class ZeroCMS {
     const style = document.createElement('style');
     style.id = this.styleId;
     style.textContent = `
-      .cms-editable:hover { outline: 2px dashed #7c3aed !important; outline-offset: 4px !important; cursor: text !important; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; box-shadow: 0 0 15px rgba(124, 58, 237, 0.3) !important; }
-      .cms-editable:focus { outline: 2px solid #7c3aed !important; background: rgba(124, 58, 237, 0.08) !important; z-index: 100001 !important; position: relative !important; box-shadow: 0 0 20px rgba(124, 58, 237, 0.4) !important; outline-offset: 6px !important; }
-      .cms-highlight { outline: 4px solid #7c3aed !important; outline-offset: 4px !important; z-index: 110000 !important; box-shadow: 0 0 50px rgba(124, 58, 237, 0.4) !important; animation: cms-pulse 2s infinite !important; }
+      .cms-editable { transition: all 0.2s ease !important; }
+      .cms-editable:hover { outline: 2px dashed #3b82f6 !important; outline-offset: 4px !important; cursor: text !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
+      .cms-editable:focus { outline: 2px solid #10b981 !important; background: rgba(16, 185, 129, 0.05) !important; z-index: 100001 !important; position: relative !important; box-shadow: 0 0 20px rgba(16, 185, 129, 0.4) !important; outline-offset: 6px !important; }
+      .cms-modified:not(:focus) { outline: 2px dashed #a855f7 !important; outline-offset: 4px !important; box-shadow: 0 0 10px rgba(168, 85, 247, 0.2) !important; }
+      .cms-highlight { outline: 4px solid #3b82f6 !important; outline-offset: 4px !important; z-index: 110000 !important; box-shadow: 0 0 50px rgba(59, 130, 246, 0.4) !important; animation: cms-pulse 2s infinite !important; }
       @keyframes cms-pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
     `;
     document.head.appendChild(style);
@@ -275,6 +292,7 @@ class ZeroCMS {
       if (el) {
         if (el.tagName === 'IMG') el.src = val;
         else el.innerText = val;
+        el.classList.remove('cms-modified');
       }
       delete this.changes[selector];
       this.historyStack = this.historyStack.filter(e => e.selector !== selector);
@@ -301,6 +319,7 @@ class ZeroCMS {
     if (el) {
       if (el.tagName === 'IMG') el.src = entry.original;
       else el.innerText = entry.original;
+      el.classList.remove('cms-modified');
     }
     
     delete this.changes[entry.selector];
@@ -316,6 +335,7 @@ class ZeroCMS {
     if (el) {
       if (el.tagName === 'IMG') el.src = entry.updated;
       else el.innerText = entry.updated;
+      el.classList.add('cms-modified');
     }
     
     this.changes[entry.selector] = entry.updated;
@@ -361,6 +381,10 @@ class ZeroCMS {
     if (this.changes[selector]) {
         delete this.changes[selector];
         this.historyStack = this.historyStack.filter(e => e.selector !== selector);
+        
+        const el = document.querySelector(selector);
+        if (el) el.classList.remove('cms-modified');
+
         this.broadcast();
     }
   }
