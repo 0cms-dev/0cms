@@ -1,5 +1,8 @@
 # Zero-Config In-Browser CMS
 
+> [!WARNING]
+> **Work in Progress (Alpha)**: ZeroCMS is an experimental project. Many features are partially implemented, and you may encounter bugs. We are currently building the core engine—expect breaking changes.
+
 <a href="https://github.com/apps/0cms-dev/installations/new">
   <img src="https://img.shields.io/badge/Install_0CMS-GitHub_App-black?style=for-the-badge&logo=github" alt="Install 0CMS" height="40" />
 </a>
@@ -57,11 +60,27 @@ ZeroCMS is designed with a **Zero-Trust** security model. Running untrusted code
 
 ## 🚀 Framework Support
 
-ZeroCMS is framework-agnostic and automatically detects your project structure. Each example repository in the [examples/](file:///Users/martin/Documents/Projects/0CMS/examples/) directory contains its own live demo link and specific configuration details.
+ZeroCMS uses a **Declarative Driver** system. While the engine is designed to be universal, specific support is being built out one-by-one.
 
-Supported frameworks include:
-- **Active**: Next.js, Astro, Hexo, Hugo, Eleventy, VitePress.
-- **Beta**: Nuxt, SvelteKit, Jekyll, Zola.
+- **Stable**: Astro, Hexo, Generic Vite (Static).
+- **Experimental**: Next.js (Static Export), Eleventy.
+- **Planned / Stubs**: Nuxt, SvelteKit, Remix, Hugo (Go-WASM required).
+
+## 🏗 Modular Architecture ("Architectural Gold")
+
+We strive for what we call "Architectural Gold"—patterns that are clean, modular, and highly performant. However, we are still refining these implementations:
+
+1.  **Deterministic Traceability**: Using invisible Unicode breadcrumbs to map rendered DOM elements back to their exact source file and line number with 100% accuracy.
+2.  **Hybrid WASM Core**: A pluggable engine that uses **JavaScript** for instant starts on small projects and switches to **Rust (WASM)** for massive monorepos. (Note: Rust binary is currently in development).
+3.  **Quantum Pre-warming**: The WebContainer engine starts booting the second you hit the landing page, ensuring the dashboard is ready before you even finish logging in.
+4.  **Zero-Copy Memory**: Using `SharedArrayBuffer` and `TypedArrays` to share project data between the UI and the WASM engine without slow serialization.
+
+## ⚠️ Current Limitations (Be Aware)
+
+- **Mocked WASM**: The high-performance Rust tagger is currently mocked via a JavaScript fallback.
+- **Parsing Fidelity**: Complex template logic (nested Nunjucks/Liquid) may still struggle with edge cases during tagging.
+- **Static Only**: We currently focus on SSG (Static Site Generation). SSR (Server Side Rendering) support within the preview is limited.
+- **Git Conflicts**: Automated conflict resolution during "Publish" is still manual.
 
 ## 🤝 Contributing & Self-Hosting
 

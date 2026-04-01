@@ -137,6 +137,13 @@ if (isHostApp) {
 
 
 // 1. QUANTUM PRE-WARM: Start engine immediately if we have a repo (UNLESS in Demo Mode)
+// - [x] Implement `MarkerService.js` (Zero-Width Encoding/Decoding)
+// - [x] Create `TaggerTrait.js` (WebContainer Instrumentation logic)
+// - [x] Integrate `TaggerTrait` into `WebContainerGitService.js` (Pre-build hook)
+// - [x] Update `cms.js` (Bridge detection and source mapping)
+// - [x] Handle Source Mapping in `app.js`
+// - [ ] Implement `cleanup` logic (Remove markers before save/publish)
+// - [ ] Verification with Astro/Hexo sample
 let preWarmingService = null;
 if (settings.repo && settings.token && !isDemoMode) {
     preWarmingService = new WebContainerGitService();
@@ -204,6 +211,28 @@ window.addEventListener('message', async (e) => {
         } catch (err) {
             console.error('[Extraction] Failed to write files:', err);
             showToast('Failed to save component', 'error');
+        }
+    }
+
+    // DETERMINISTIC SOURCE MAPPING HANDLER
+    if (e.data.type === 'CMS_SOURCE_LOCATED') {
+        const { fileId, line, selector } = e.data;
+        try {
+            const mapRaw = await cmsService.webcontainerInstance.fs.readFile('/zcms-source-map.json', 'utf8');
+            const sourceMap = JSON.parse(mapRaw);
+            const path = sourceMap[fileId];
+            
+            if (path) {
+                console.log(`[Source Trace] Map found: ${path} (Line ${line})`);
+                // Update UI Indicator (Optional: Open file in some future editor view)
+                if (window.ui.sourceIndicator) {
+                    window.ui.sourceIndicator.innerHTML = `<span>Origin:</span> ${path.split('/').pop()} : ${line}`;
+                    window.ui.sourceIndicator.title = path;
+                    window.ui.sourceIndicator.classList.add('active');
+                }
+            }
+        } catch (err) {
+            console.warn('[Source Trace] Failed to resolve source:', err);
         }
     }
 });

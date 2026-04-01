@@ -80,9 +80,13 @@
                 <button class="btn-toggle" onclick="window.location.href='/login'">Sign In</button>
             </div>
             <div id="cmsLandingProject" style="display:none;">
-                <div class="url-chip">
+                <div id="save-status" class="status-indicator">
                     <div class="status-dot"></div>
-                    <span id="activeProjectName">No project selected</span>
+                    <span id="status-text">Draft Saved</span>
+                </div>
+                
+                <div id="source-indicator" class="source-indicator">
+                    <span>Origin:</span> scanning...
                 </div>
                 <button class="btn-toggle" onclick="toggleDashboard(true)">Open Dashboard</button>
             </div>

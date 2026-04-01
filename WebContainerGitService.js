@@ -2,10 +2,12 @@ import git from '/lib/isomorphic-git.js';
 import FS from '/lib/lightning-fs.js';
 import { WebContainer } from '/lib/webcontainer-api.js';
 import { FrameworkBroker } from './lib/frameworks/FrameworkBroker.js';
+import { TaggerTrait } from './lib/frameworks/traits/TaggerTrait.js';
+
 /**
  * WebContainerGitService
  * Orchestrates Git operations in browser-persistent storage and 
- * runs a development environment using WebContainers.
+ * manages the WASM-based WebContainer execution engine.
  */
 export class WebContainerGitService {
   constructor(config = {}) {
@@ -184,6 +186,7 @@ export class WebContainerGitService {
     if (!this.webcontainerInstance) {
       this.webcontainerInstance = await WebContainer.boot();
       this.broker = new FrameworkBroker(this.webcontainerInstance);
+      this.tagger = new TaggerTrait(this.webcontainerInstance);
     }
   }
 
@@ -258,6 +261,21 @@ export class WebContainerGitService {
       this.activeDriver = await this.broker.detect();
       if (this.activeDriver) {
           this.onLog(`[Auto-Detect] Matched Driver: ${this.activeDriver.name}`);
+          
+          // NEW: DETERMINISTIC INSTRUMENTATION (BATCHED)
+          this.onLog('[Instrumentation] Injecting invisible Unicode breadcrumbs (Batched Mode)...');
+          
+          const contentFiles = [];
+          for (const dir of this.activeDriver.routing.contentPaths) {
+              const files = await this.tagger.recursiveReaddir(dir.startsWith('/') ? dir : '/' + dir);
+              contentFiles.push(...files.filter(f => f.endsWith('.md') || f.endsWith('.json')));
+          }
+          
+          const startTime = performance.now();
+          await this.tagger.instrumentBatch(contentFiles);
+          const duration = (performance.now() - startTime).toFixed(2);
+          
+          this.onLog(`[Instrumentation] Completed: ${contentFiles.length} files in ${duration}ms.`);
       } else {
           this.onLog('[Auto-Detect] No specific driver matched. Using generic fail-safe.');
       }
