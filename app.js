@@ -178,8 +178,9 @@ if (isDemoMode && isHostApp) {
     });
 }
 
-// --- COMPONENT EXTRACTION LOGIC ---
+// --- COMPONENT EXTRACTION & SOURCE TRACKING ---
 let isExtractMode = false;
+let activeSourceMetadata = null; // Deterministic Marker Cache
 
 window.toggleExtractMode = (enabled) => {
     isExtractMode = enabled !== undefined ? enabled : !isExtractMode;
@@ -232,22 +233,31 @@ window.addEventListener('message', async (e) => {
     // DETERMINISTIC SOURCE MAPPING HANDLER
     if (e.data.type === 'CMS_SOURCE_LOCATED') {
         const { fileId, line, selector } = e.data;
-        try {
-            const mapRaw = await cmsService.webcontainerInstance.fs.readFile('/zcms-source-map.json', 'utf8');
-            const sourceMap = JSON.parse(mapRaw);
-            const path = sourceMap[fileId];
-            
+        activeSourceMetadata = { fileId, line, selector };
+        
+        if (cmsService) {
+            const path = cmsService.tagger.pathMap.get(fileId);
             if (path) {
-                console.log(`[Source Trace] Map found: ${path} (Line ${line})`);
-                // Update UI Indicator (Optional: Open file in some future editor view)
-                if (window.ui.sourceIndicator) {
-                    window.ui.sourceIndicator.innerHTML = `<span>Origin:</span> ${path.split('/').pop()} : ${line}`;
-                    window.ui.sourceIndicator.title = path;
-                    window.ui.sourceIndicator.classList.add('active');
+                // Central Status Messaging (No HUD changes)
+                const filename = path.split('/').pop();
+                if (ui.loaderStatus) {
+                    ui.loaderStatus.textContent = `Source Verified: ${filename} (Line ${line})`;
+                    ui.previewLoader.style.display = 'flex';
+                    ui.previewLoader.classList.remove('hidden');
+                    ui.previewLoader.style.opacity = '1';
+                    
+                    // Fade out after a moment
+                    setTimeout(() => {
+                        if (ui.loaderStatus.textContent.includes('Source Verified')) {
+                            ui.previewLoader.style.opacity = '0';
+                            setTimeout(() => {
+                                ui.previewLoader.style.display = 'none';
+                                ui.previewLoader.classList.add('hidden');
+                            }, 500);
+                        }
+                    }, 2000);
                 }
             }
-        } catch (err) {
-            console.warn('[Source Trace] Failed to resolve source:', err);
         }
     }
 });
@@ -492,10 +502,15 @@ window.addEventListener('message', (e) => {
         if (entries.length > 0 && cmsService) {
             const lastEntry = entries[entries.length - 1];
             if (lastEntry.original && lastEntry.updated && lastEntry.original !== lastEntry.updated) {
+                 // Enhanced Deterministic Editing
+                 const metadata = (activeSourceMetadata && activeSourceMetadata.selector === lastEntry.selector) 
+                    ? activeSourceMetadata 
+                    : null;
+
                  cmsService.applySmartMatchChange(
                     lastEntry.original, 
                     lastEntry.updated, 
-                    lastEntry.sourceFile || null
+                    metadata
                  ).then(async (result) => {
                     if (result && result.path && result.content) {
                         WasmBridge.getInstance().syncFile(result.path, result.content);

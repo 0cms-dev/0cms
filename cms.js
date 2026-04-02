@@ -89,26 +89,43 @@ class ZeroCMS {
     const SEP = '\u200D';
     const END = '\uFEFF';
 
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
-    let node;
-    while(node = walker.nextNode()) {
-      const text = node.nodeValue;
-      const regex = new RegExp(`${START}([${ZERO}${ONE}${SEP}]+)${END}`, 'g');
-      const matches = [...text.matchAll(regex)];
-      if (matches.length > 0) {
-        const payload = matches[0][1];
-        const parts = payload.split(SEP);
-        if (parts.length === 2) {
-            const fileId = parseInt(parts[0].split('').map(c => c === ONE ? '1' : '0').join(''), 2);
-            const line = parseInt(parts[1].split('').map(c => c === ONE ? '1' : '0').join(''), 2);
-            return { fileId, line };
+    const checkText = (text) => {
+        const regex = new RegExp(`${START}([${ZERO}${ONE}${SEP}]+)${END}`, 'g');
+        const matches = [...text.matchAll(regex)];
+        if (matches.length > 0) {
+            const payload = matches[0][1];
+            const parts = payload.split(SEP);
+            if (parts.length === 2) {
+                const fileId = parseInt(parts[0].split('').map(c => c === ONE ? '1' : '0').join(''), 2);
+                const line = parseInt(parts[1].split('').map(c => c === ONE ? '1' : '0').join(''), 2);
+                return { fileId, line };
+            }
         }
-      }
+        return null;
+    };
+
+    // 1. Check direct children text nodes
+    for (const node of element.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const result = checkText(node.nodeValue);
+            if (result) {
+                this.identify(element);
+                return result;
+            }
+        }
     }
+
+    // 2. Recursive parent search
     if (element.parentElement && element.parentElement !== document.body) {
         return this.findBreadcrumb(element.parentElement);
     }
     return null;
+  }
+
+  identify(el) {
+    if (el.classList.contains('cms-identified')) return;
+    el.classList.add('cms-identified');
+    setTimeout(() => el.classList.remove('cms-identified'), 1000);
   }
 
   handleImageClick(img, selector) {

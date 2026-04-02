@@ -526,8 +526,19 @@ export class WebContainerGitService {
     }
 
     this.onLog(`[Publish] Git detected ${changedFiles.length} changed file(s). Staging...`);
+    
+    // 4. STRIP BREADCRUMBS: Ensure production code is clean of invisible markers
+    this.onStatusChange('Sanitizing Code...');
     for (const [file] of changedFiles) {
-      this.onLog(` + ${file}`);
+      const fullPath = (this.dir + '/' + file).replace(/\/+/g, '/');
+      try {
+          const raw = await this.fs.readFile(fullPath, 'utf8');
+          const clean = (await import('./lib/services/MarkerService.js')).MarkerService.strip(raw);
+          if (clean !== raw) {
+              await this.fs.writeFile(fullPath, clean);
+              this.onLog(` ✨ Cleaned: ${file}`);
+          }
+      } catch (e) {}
       await git.add({ fs: this.fs, dir: this.dir, filepath: file });
     }
 
@@ -592,9 +603,16 @@ export class WebContainerGitService {
    * Tracks every file it writes to in this._modifiedFiles.
    * Uses partial/word matching for template-composed strings.
    */
-  async applySmartMatchChange(original, updated, sourceFile = null) {
+  async applySmartMatchChange(original, updated, metadata = null) {
     if (!original || original === updated) return false;
     
+    // Resolve deterministic source if metadata (fileId/line) is provided
+    let sourceFile = null;
+    if (metadata && metadata.fileId) {
+        sourceFile = this.tagger.pathMap.get(metadata.fileId);
+        if (sourceFile) this.onLog(`[SmartMatch] Deterministic Link: ${sourceFile} (Line: ${metadata.line || '?'})`);
+    }
+
     const writeAndTrack = async (filePath, content) => {
       await this.webcontainerInstance.fs.writeFile(filePath, content);
       const absPath = filePath.startsWith('/') ? filePath : '/' + filePath;
