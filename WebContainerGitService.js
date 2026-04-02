@@ -529,18 +529,37 @@ export class WebContainerGitService {
     
     // 4. STRIP BREADCRUMBS: Ensure production code is clean of invisible markers
     this.onStatusChange('Sanitizing Code...');
+    const startTime = performance.now();
+    
+    // Batch process all changed files for maximum speed
+    const filesToStrip = [];
     for (const [file] of changedFiles) {
-      const fullPath = (this.dir + '/' + file).replace(/\/+/g, '/');
-      try {
-          const raw = await this.fs.readFile(fullPath, 'utf8');
-          const clean = (await import('./lib/services/MarkerService.js')).MarkerService.strip(raw);
-          if (clean !== raw) {
-              await this.fs.writeFile(fullPath, clean);
-              this.onLog(` ✨ Cleaned: ${file}`);
-          }
-      } catch (e) {}
-      await git.add({ fs: this.fs, dir: this.dir, filepath: file });
+        const fullPath = (this.dir + '/' + file).replace(/\/+/g, '/');
+        try {
+            const content = await this.fs.readFile(fullPath, 'utf8');
+            filesToStrip.push({ path: file, content, fullPath });
+        } catch (e) {}
     }
+
+    if (filesToStrip.length > 0) {
+        const cleanedResults = await this.tagger.stripBatch(filesToStrip);
+        for (const res of cleanedResults) {
+            const original = filesToStrip.find(f => f.path === res.path);
+            if (original && res.content !== original.content) {
+                await this.fs.writeFile(original.fullPath, res.content);
+                this.onLog(` ✨ Sanitized: ${res.path}`);
+            }
+        }
+    }
+
+    // Stage all files
+    for (const [file] of changedFiles) {
+        await git.add({ fs: this.fs, dir: this.dir, filepath: file });
+    }
+
+    const duration = (performance.now() - startTime).toFixed(2);
+    this.onLog(`[Sanitization] Completed: ${changedFiles.length} files in ${duration}ms.`);
+
 
     await git.commit({
       fs: this.fs,

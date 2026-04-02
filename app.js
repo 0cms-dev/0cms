@@ -80,10 +80,18 @@ const ui = isHostApp ? {
     
     // EXTRACTION UI
     btnExtractMode: document.getElementById('btnExtractMode'),
+    btnAddComponent: document.getElementById('btnAddComponent'),
     extractPanel: document.getElementById('cmsExtractPanel'),
     extractNameInput: document.getElementById('extractComponentName'),
     btnConfirmExtract: document.getElementById('btnConfirmExtract'),
     
+    // SIDEBAR TABS & VIEWS
+    tabChanges: document.getElementById('tabChanges'),
+    tabComponents: document.getElementById('tabComponents'),
+    viewChanges: document.getElementById('viewChanges'),
+    viewComponents: document.getElementById('viewComponents'),
+    componentList: document.getElementById('cmsComponentList'),
+
     // PROGRESS & LOGGING
     progressCircle: document.getElementById('cmsProgressCircle'),
     terminal: document.getElementById('cmsTerminalText'),
@@ -198,6 +206,23 @@ window.toggleExtractMode = (enabled) => {
 
 safeBind(ui.btnExtractMode, 'onclick', () => window.toggleExtractMode());
 
+safeBind(ui.btnAddComponent, 'onclick', () => {
+    window.toggleHistory(true);
+    ui.tabComponents.click();
+});
+
+// SIDEBAR TAB SWITCHING
+const switchSidebarTab = (tabId) => {
+    const isChanges = tabId === 'tabChanges';
+    ui.tabChanges.classList.toggle('active', isChanges);
+    ui.tabComponents.classList.toggle('active', !isChanges);
+    ui.viewChanges.style.display = isChanges ? 'flex' : 'none';
+    ui.viewComponents.style.display = isChanges ? 'none' : 'flex';
+};
+
+safeBind(ui.tabChanges, 'onclick', () => switchSidebarTab('tabChanges'));
+safeBind(ui.tabComponents, 'onclick', () => switchSidebarTab('tabComponents'));
+
 safeBind(ui.btnConfirmExtract, 'onclick', () => {
     const name = ui.extractNameInput.value.trim();
     if (!name) return showToast('Please enter a component name', 'error');
@@ -208,26 +233,38 @@ safeBind(ui.btnConfirmExtract, 'onclick', () => {
     }, '*');
 });
 
-// Listener for extracted data from bridge
+// Listener for extracted data from bridge (Universal Components)
 window.addEventListener('message', async (e) => {
-    if (e.data.type === 'CMS_COMPONENT_DATA') {
-        const { name, html, css } = e.data;
-        if (!cmsService || !cmsService.activeDriver) {
-            return showToast('Engine not ready', 'error');
-        }
+    if (e.data.type === 'CMS_COMPONENT_CAPTURED') {
+        const { name, html } = e.data;
+        if (!cmsService) return;
         
-        try {
-            const files = cmsService.activeDriver.templating.prepareComponentFiles(name, html, css);
-            for (const [path, content] of Object.entries(files)) {
-                await cmsService.updateFile(path, content);
-            }
-            showToast(`Component "${name}" extracted successfully!`, 'success');
-            window.toggleExtractMode(false);
-            ui.extractNameInput.value = '';
-        } catch (err) {
-            console.error('[Extraction] Failed to write files:', err);
-            showToast('Failed to save component', 'error');
-        }
+        // 1. Show the "+ Add" button in the HUD
+        if (ui.btnAddComponent) ui.btnAddComponent.style.display = 'flex';
+        
+        // 2. Render Card in Sidebar
+        const card = document.createElement('div');
+        card.className = 'component-card';
+        card.innerHTML = `
+            <div class="component-card-preview">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.3"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            </div>
+            <div class="component-card-name">${name}</div>
+            <div class="component-card-meta">HTML Fragment • Cleaned</div>
+        `;
+        
+        // Long term: insertion logic. Short term: just render.
+        ui.componentList.prepend(card);
+        
+        // Remove "No components found" placeholder
+        const placeholder = ui.componentList.querySelector('div[style*="text-align:center"]');
+        if (placeholder) placeholder.remove();
+
+        showToast(`Component "${name}" discovered! Check the Library.`, 'success');
+        
+        // Write to project if needed (optional for discovery)
+        const path = `/src/components/zcms/${name.toLowerCase().replace(/\s+/g, '_')}.html`;
+        await cmsService.updateFile(path, html);
     }
 
     // DETERMINISTIC SOURCE MAPPING HANDLER
@@ -472,8 +509,8 @@ window.addEventListener('message', (e) => {
             }, 500);
         }
         if (ui.statusLabel) {
-            ui.statusLabel.textContent = '0 unsaved changes';
-            ui.statusLabel.style.color = 'var(--text)';
+            ui.statusLabel.textContent = '0 unchanged changes';
+            ui.statusLabel.style.color = 'var(--text-muted)';
             ui.statusLabel.style.opacity = '0.7';
         }
         const statusIcon = document.getElementById('cmsStatusIcon');
@@ -488,16 +525,14 @@ window.addEventListener('message', (e) => {
         changes = e.data.changes;
         entries = e.data.entries || []; // Update global, no shadowing
         
-        ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
-        ui.statusLabel.textContent = `${count} unsaved change${count !== 1 ? 's' : ''}`;
-        ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text)';
-        ui.statusLabel.style.opacity = count > 0 ? '1' : '0.7';
-        
-        const statusIcon = document.getElementById('cmsStatusIcon');
-        if (statusIcon) statusIcon.style.stroke = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
-        
         if (ui.historyCount) ui.historyCount.textContent = count;
         
+        // HUD Status Update (Professional Count)
+        if (ui.statusLabel) {
+            ui.statusLabel.textContent = `${count} unchanged change${count !== 1 ? 's' : ''}`;
+            ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        }
+
         // REAL-TIME SYNC: Apply the last change to the WebContainer FS
         if (entries.length > 0 && cmsService) {
             const lastEntry = entries[entries.length - 1];
@@ -655,13 +690,10 @@ async function startCmsEngine(repo, token, demo = false) {
         
         // ONLY update HUD label if we are NOT booting or if it's the final ready state
         if (status === 'Server Ready!') {
-            if (ui.statusLabel) ui.statusLabel.textContent = '0 unsaved changes';
+            if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
             document.documentElement.classList.remove('booting');
         } else {
-            // During boot, we can show status in HUD too, or keep it clean. 
-            // User said: "unten im hud sollen die changes sichtbar sein!"
-            // So we show 0 changes until actual changes happen.
-            if (ui.statusLabel) ui.statusLabel.textContent = '0 unsaved changes';
+            if (ui.statusLabel) ui.statusLabel.textContent = 'Preparing...';
             document.documentElement.classList.add('booting');
         }
         
@@ -686,15 +718,14 @@ async function startCmsEngine(repo, token, demo = false) {
     };
 
     cmsService.onServerReady = (url) => {
-        // HIJACK PROTECTION: If the user is in Demo Mode, do NOT overwrite the preview URL
-        // with the background engine's real project URL.
+        // HIJACK PROTECTION...
         if (isDemoMode) {
             console.log('[CMS] Background engine ready, but suppressing UI update because Demo Mode is active.');
             return;
         }
 
         ui.preview.src = url;
-        ui.statusLabel.textContent = 'Website Ready';
+        if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
         
         // Auto-enable Zen Editor on load
         ui.preview.onload = () => {
@@ -714,7 +745,7 @@ async function startCmsEngine(repo, token, demo = false) {
     // If already pre-warmed, ensure UI shows the URL immediately
     if (cmsService.serverUrl) {
         ui.preview.src = cmsService.serverUrl;
-        ui.statusLabel.textContent = cmsService.serverUrl;
+        if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
         
         // ACTIVATE RUNTIME BRIDGE: Ensure PHP/Python/Rust preview is ready
         if (cmsService.activeDriver) {

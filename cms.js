@@ -43,8 +43,26 @@ class ZeroCMS {
       window.parent.postMessage({ type: 'CMS_READY' }, '*');
     }
 
+    // Extraction Mode Listeners (Universal Component Extraction)
+    document.addEventListener('mouseover', (e) => {
+        if (!this.extractMode) return;
+        if (e.target.closest('.cms-ui')) return;
+        e.target.classList.add('cms-extract-hover');
+    });
+    document.addEventListener('mouseout', (e) => {
+        if (!this.extractMode) return;
+        e.target.classList.remove('cms-extract-hover');
+    });
+
     // Global Click Listener for Source Mapping & Editing
     document.addEventListener('click', (e) => {
+      if (this.extractMode) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.captureComponent();
+          return;
+      }
+      
       if (!this.active) return;
       if (e.target.closest('.cms-ui')) return; // Ignore clicks on CMS UI elements
 
@@ -271,6 +289,7 @@ class ZeroCMS {
       .cms-modified:not(:focus) { outline: 2px dashed #a855f7 !important; outline-offset: 4px !important; box-shadow: 0 0 10px rgba(168, 85, 247, 0.2) !important; }
       .cms-highlight { outline: 4px solid #3b82f6 !important; outline-offset: 4px !important; z-index: 110000 !important; box-shadow: 0 0 50px rgba(59, 130, 246, 0.4) !important; animation: cms-pulse 2s infinite !important; }
       @keyframes cms-pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+      .cms-extract-hover { outline: 3px dashed #a855f7 !important; outline-offset: 2px !important; cursor: crosshair !important; box-shadow: 0 0 20px rgba(168, 85, 247, 0.3) !important; background: rgba(168, 85, 247, 0.05) !important; }
     `;
     document.head.appendChild(style);
   }
@@ -279,10 +298,64 @@ class ZeroCMS {
   toggleExtractMode(enabled) {
     this.extractMode = enabled;
     document.body.style.cursor = enabled ? 'crosshair' : '';
+    console.log(`%c[0cms] %cExtraction Mode ${enabled ? 'ENABLED' : 'DISABLED'}`, 'color:#a855f7; font-weight:bold;', 'color:inherit;');
+    
+    if (!enabled) {
+        document.querySelectorAll('.cms-extract-hover').forEach(el => el.classList.remove('cms-extract-hover'));
+    }
   }
 
   captureComponent(name) {
-    // Logic for capturing component HTML/CSS
+    if (!this.extractMode) return;
+    
+    // Find the current hover or highest-level focused element
+    const el = document.querySelector('.cms-extract-hover');
+    if (!el) {
+        alert('Please hover over an element to extract.');
+        return;
+    }
+
+    // 1. CLONE AND CLEAN
+    const clone = el.cloneNode(true);
+    
+    // Remove all CMS-specific markers and logic
+    const clean = (target) => {
+        target.classList.remove('cms-editable', 'cms-modified', 'cms-highlight', 'cms-identified', 'cms-extract-hover');
+        delete target.dataset.cmsOriginal;
+        
+        // Strip invisible breadcrumbs from all text nodes in the clone
+        const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+        let node;
+        const START = '\uFEFF'; 
+        const ZERO = '\u200B';
+        const ONE = '\u200C';
+        const SEP = '\u200D';
+        const END = '\uFEFF';
+        const regex = new RegExp(`[${START}${ZERO}${ONE}${SEP}${END}]`, 'g');
+
+        while (node = walker.nextNode()) {
+            node.nodeValue = node.nodeValue.replace(regex, '');
+        }
+
+        // Recursive clean for children
+        for (const child of target.children) {
+            clean(child);
+        }
+    };
+
+    clean(clone);
+
+    // 2. BROADCAST TO DASHBOARD
+    const html = clone.outerHTML;
+    const componentName = name || `component_${Math.random().toString(36).substr(2, 9)}`;
+    
+    window.parent.postMessage({
+      type: 'CMS_COMPONENT_CAPTURED',
+      name: componentName,
+      html: html
+    }, '*');
+
+    this.toggleExtractMode(false);
   }
 
   highlight(selector) {

@@ -798,6 +798,30 @@
             pointer-events: none; opacity: 0;
         }
         #cmsHistoryDrawer.open { transform: translateX(0); pointer-events: auto; opacity: 1; }
+        
+        /* SIDEBAR TABS */
+        .sidebar-tabs { display: flex; gap: 4px; background: var(--bg-tertiary); padding: 4px; border-radius: 12px; margin-bottom: 20px; }
+        .sidebar-tab { 
+            flex: 1; padding: 8px; border-radius: 8px; border: none; background: transparent; 
+            color: var(--text-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .sidebar-tab.active { background: var(--bg); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .sidebar-tab svg { width: 14px; height: 14px; }
+
+        /* COMPONENT CARDS */
+        .component-card {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px;
+            cursor: pointer; transition: 0.2s; position: relative; overflow: hidden;
+        }
+        .component-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 16px rgba(124, 58, 237, 0.1); }
+        .component-card-preview { 
+            height: 80px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px; 
+            display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--text-muted);
+            overflow: hidden; border: 1px solid var(--border);
+        }
+        .component-card-name { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+        .component-card-meta { font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; }
 
         #cmsPageSettingsPanel {
             bottom: 80px; left: 50%; transform: translateX(-50%); 
@@ -1055,8 +1079,13 @@
                 <div class="command-pill">
                     <div class="url-chip" id="urlChipStatus" style="cursor:pointer;" title="Click to view unsaved changes">
                         <svg id="cmsStatusIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">0 unsaved changes</span>
+                        <span id="cmsStatusLabel" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">0 unchanged changes</span>
                     </div>
+
+                    <button class="dock-item" id="btnAddComponent" title="Identified Components" style="display:none; color:var(--primary); font-weight:800;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Add
+                    </button>
                     
                     <div class="dock-divider"></div>
                     
@@ -1100,15 +1129,28 @@
 
             <div class="cms-main-area">
                 <div id="cmsHistoryDrawer">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <h3 style="font-size:1rem; margin:0">Unsaved Changes</h3>
-                            <div id="cmsHistoryCount" style="font-size:0.7rem; background:var(--bg-tertiary); padding:2px 6px; border-radius:100px;">0</div>
-                        </div>
-                        <button class="btn-toggle" style="background:transparent; padding:0; color:var(--text-muted); font-size: 1.1rem;" onclick="toggleHistory(false)">✕</button>
+                    <div class="sidebar-tabs">
+                        <button class="sidebar-tab active" id="tabChanges">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            Changes
+                        </button>
+                        <button class="sidebar-tab" id="tabComponents">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                            Library
+                        </button>
                     </div>
-                    <div id="cmsHistoryList" style="flex:1; overflow-y:auto;">
-                        <div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>
+                    
+                    <div id="viewChanges" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                        <div id="cmsHistoryList" style="flex:1; overflow-y:auto;">
+                            <div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>
+                        </div>
+                    </div>
+
+                    <div id="viewComponents" style="flex:1; display:none; flex-direction:column; overflow:hidden;">
+                        <input type="text" id="componentSearch" class="settings-input" placeholder="Search library..." style="margin-bottom:12px;">
+                        <div id="cmsComponentList" style="flex:1; overflow-y:auto;">
+                            <div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No components found.</div>
+                        </div>
                     </div>
                 </div>
                 <iframe id="cmsPreviewFrame" src="about:blank" allow="cross-origin-isolated"></iframe>

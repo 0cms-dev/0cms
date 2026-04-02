@@ -79,3 +79,26 @@ pub fn instrument_batch(input_json: &str) -> String {
 
     serde_json::to_string(&results).unwrap()
 }
+/**
+ * Universal Breadcrumb Stripper (Rust-WASM Version)
+ * Removes all Zero-Width markers from a batch of files for clean Git commits.
+ */
+#[wasm_bindgen]
+pub fn strip_batch(input_json: &str) -> String {
+    let files: Vec<FileInfo> = serde_json::from_str(input_json).unwrap_or_else(|_| vec![]);
+    let mut results = Vec::new();
+    
+    // Regex matching all our invisible marker characters
+    let re_strip = Regex::new(r"[\u{FEFF}\u{200B}\u{200C}\u{200D}]").unwrap();
+
+    for file in files {
+        let clean = re_strip.replace_all(&file.content, "");
+        results.push(InstrumentationResult {
+            path: file.path,
+            content: clean.into_owned(),
+            map: HashMap::new(),
+        });
+    }
+
+    serde_json::to_string(&results).unwrap()
+}
