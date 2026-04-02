@@ -33,7 +33,9 @@ export class WebContainerGitService {
     this.isDevMode = false;
     this.serverProcess = null;
     this.middlewareProc = null;
-    
+    this._lastMiddlewarePort = null;
+    this.middlewareStarted = false;
+    this._isOrchestratingMiddleware = false;
     // Track files actually modified by applySmartMatchChange so we know what to sync
     this._modifiedFiles = new Set();
     this._syncTimer = null;
@@ -277,15 +279,25 @@ export class WebContainerGitService {
     });
   }
 
-  async startMiddleware(targetPort = null) {
-    this.onStatusChange('Starting CMS Middleware...');
+  /**
+   * Idempotent Middleware Startup: Ensures the bridge is running for the correct target port.
+   */
+  async ensureMiddleware(targetPort) {
+    // 0. CONCURRENCY LOCK: Prevent parallel orchestrations
+    if (this._isOrchestratingMiddleware) return;
     
-    // Check if we have a cached build to serve instantly
-    const hasCache = await this.fs.readdir('/__qcms_cache__').then(e => e.length > 0).catch(() => false);
-    const port = targetPort || (hasCache ? 4000 : this.activeDriver?.server.port || 3000);
+    // If already started for the exact same port, do nothing
+    if (this.middlewareStarted && this._lastMiddlewarePort === targetPort) {
+        return;
+    }
 
-    // 1. Create the middleware proxy script from the active driver
-    const middlewareContent = this.activeDriver?.server.getMiddlewareScript(port) || `
+    this._isOrchestratingMiddleware = true;
+    try {
+        this.onLog(`[Middleware] Target updated to port ${targetPort}. Orchestrating bridge...`);
+        this._lastMiddlewarePort = targetPort;
+
+    // 1. Create the middleware proxy script
+    const middlewareContent = this.activeDriver?.server.getMiddlewareScript(targetPort) || `
       const http = require('http');
       const server = http.createServer((req, res) => {
         res.writeHead(502); res.end('No framework driver active.');
@@ -293,27 +305,59 @@ export class WebContainerGitService {
       server.listen(3001, '0.0.0.0');
     `;
     
-    // 2. Fetch the Bridge script (cms.js) and write both to the WebContainer
     const bridgeResponse = await fetch('/cms.js');
     const bridgeContent = await bridgeResponse.text();
     
     await this.webcontainerInstance.fs.writeFile('zcms-bridge.js', bridgeContent);
     await this.webcontainerInstance.fs.writeFile('zcms-middleware.js', middlewareContent);
     
-    // 3. Kill previous if any and SPAWN fresh
+    // 2. Kill previous if any
     if (this.middlewareProc) {
         try { this.middlewareProc.kill(); } catch (e) {}
         this.middlewareProc = null;
     }
     
-    this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
-        env: { TARGET_PORT: port }
-    });
-    this.middlewareProc.output.pipeTo(new WritableStream({
-        write: (data) => this.onLog(`[bridge] ${data}`)
-    }));
+    // 3. NUCLEAR PORT CLEANUP: Forcefully kill any zombie on 3001
+    try {
+        const killProc = await this.webcontainerInstance.spawn('npx', ['--yes', 'kill-port', '3001']);
+        await killProc.exit;
+    } catch (e) {}
     
-    this.middlewareStarted = true;
+    await new Promise(r => setTimeout(r, 800)); 
+    
+    // 4. RETRY LOOP
+    let retryCount = 0;
+    while (retryCount < 3) {
+        try {
+            this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
+                env: { TARGET_PORT: targetPort }
+            });
+            this.middlewareProc.output.pipeTo(new WritableStream({
+                write: (data) => {
+                    this.onLog(`[bridge] ${data}`);
+                    if (data.includes('EADDRINUSE')) {
+                        this.onLog(`[Warning] Port 3001 busy (Retry ${retryCount+1}/3)...`);
+                    }
+                }
+            }));
+            
+            this.middlewareStarted = true;
+            return;
+        } catch (e) {
+            retryCount++;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
+    
+    this.onLog('[Error] Failed to start middleware after 3 retries.');
+    } finally {
+        this._isOrchestratingMiddleware = false;
+    }
+  }
+
+  async startMiddleware(targetPort = null) {
+      const port = targetPort || this.activeDriver?.server.port || 3000;
+      return this.ensureMiddleware(port);
   }
 
   /**
@@ -337,8 +381,10 @@ export class WebContainerGitService {
           const contentFiles = [];
           if (this.activeDriver.routing && this.activeDriver.routing.contentPaths) {
               for (const dir of this.activeDriver.routing.contentPaths) {
-                  // RESOLVE PATH relative to project root
-                  const fullDir = (this.dir + '/' + dir).replace(/\/+/g, '/');
+                  // FIX: Normalize absolute path within WebContainer
+                  let fullDir = dir.startsWith('/') ? dir : '/repo/' + dir;
+                  fullDir = fullDir.replace(/\/+/g, '/');
+                  
                   try {
                       const files = await this.tagger.recursiveReaddir(fullDir);
                       contentFiles.push(...files.filter(f => 
@@ -415,6 +461,23 @@ export class WebContainerGitService {
     }
   }
 
+  async resolveBin(cmd, pkgName) {
+    const parentDir = `/repo/node_modules/.bin`;
+    // WebContainer FS does not have stat(), so we check by reading the directory
+    const exists = await this.webcontainerInstance.fs.readdir(parentDir)
+        .then(files => files.includes(cmd))
+        .catch(() => false);
+
+    if (exists) {
+        const localPath = `${parentDir}/${cmd}`;
+        this.onLog(`[Smart-Resolution] Found local binary: ${cmd}`);
+        return localPath;
+    } else {
+        this.onLog(`[Smart-Resolution] Local ${cmd} missing. Using silent fallback: npx --yes ${pkgName}`);
+        return `npx --yes ${pkgName}`;
+    }
+  }
+
   async startDevServer(manualCommand = null) {
     let devCommand = manualCommand;
     
@@ -439,7 +502,8 @@ export class WebContainerGitService {
     // FINAL ENFORCEMENT: For Next.js projects in WebContainers, Webpack is the only stable path.
     if (this.activeDriver?.id === 'nextjs') {
        this.onLog('[Optimization] Enforced Webpack for Next.js (WebContainer compatibility).');
-       devCommand = 'npx next dev --webpack';
+       const nextBin = await this.resolveBin('next', 'next');
+       devCommand = `${nextBin} dev --webpack`;
     }
     
     // Default fallback
@@ -465,26 +529,22 @@ export class WebContainerGitService {
             }, 3500);
           }
           
-          // a. If it's the first port (not our middleware), start the middleware
-          if (port !== 3001 && !this.middlewareStarted) {
-            this.middlewareStarted = true;
-            this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
-            
-            try {
-              this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
-                env: { TARGET_PORT: port }
-              });
-    
-              this.middlewareProc.output.pipeTo(new WritableStream({
-                write: (data) => this.onLog(`[bridge] ${data}`)
-              }));
-            } catch (e) {
-              this.onLog(`[Error] Failed to start middleware: ${e.message}`);
-              this.middlewareStarted = false; // Reset on failure
-            }
+          // a. If it's the first port (not our middleware), ensure the middleware is running for IT
+          if (port !== 3001) {
+            this.ensureMiddleware(port);
           }
         });
         this._serverReadyListenerAttached = true;
+    }
+
+    // SMART AUTO-RESOLUTION: If the resulting command uses npx, try to map it to a local binary first.
+    if (devCommand.startsWith('npx --yes ')) {
+        const parts = devCommand.replace('npx --yes ', '').split(' ');
+        const binName = parts[0];
+        const localBin = await this.resolveBin(binName, binName);
+        if (localBin.startsWith('/repo')) {
+            devCommand = localBin + ' ' + parts.slice(1).join(' ');
+        }
     }
 
     this.onStatusChange(`Running: ${devCommand}...`);
@@ -1195,6 +1255,58 @@ export class WebContainerGitService {
     } catch (e) {
       return [];
     }
+  }
+
+  /**
+   * ASSET DISCOVERY: Recursively list project assets (images, svgs, etc)
+   */
+  async listAssets(dir = '/repo/public') {
+    if (!this.webcontainerInstance) return [];
+    try {
+      const results = [];
+      const entries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      
+      for (const entry of entries) {
+        const fullPath = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+            const sub = await this.listAssets(fullPath);
+            results.push(...sub);
+        } else if (entry.name.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/i)) {
+            // Get relative path for usage (e.g. /images/logo.png)
+            const publicPath = fullPath.replace('/repo/public', '') || '/';
+            results.push({
+                name: entry.name,
+                path: fullPath,
+                url: publicPath,
+                type: entry.name.split('.').pop().toLowerCase()
+            });
+        }
+      }
+      return results;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /**
+   * ASSET UPLOAD: Write a binary file to the WebContainer FS
+   */
+  async saveAsset(file, targetDir = '/repo/public/images') {
+    if (!this.webcontainerInstance) throw new Error('WebContainer not ready');
+    
+    // Ensure target dir exists
+    await this.webcontainerInstance.fs.mkdir(targetDir, { recursive: true }).catch(() => {});
+    
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const fullPath = `${targetDir}/${file.name}`;
+    
+    await this.webcontainerInstance.fs.writeFile(fullPath, uint8Array);
+    return {
+        name: file.name,
+        path: fullPath,
+        url: fullPath.replace('/repo/public', '')
+    };
   }
 
   /**

@@ -89,7 +89,13 @@ const ui = isHostApp ? {
     tabComponents: document.getElementById('tabComponents'),
     viewChanges: document.getElementById('viewChanges'),
     viewComponents: document.getElementById('viewComponents'),
+    viewAssets: document.getElementById('viewAssets'),
+    assetList: document.getElementById('cmsAssetList'),
+    assetDropZone: document.getElementById('assetDropZone'),
+    tabAssets: document.getElementById('tabAssets'),
     componentList: document.getElementById('cmsComponentList'),
+    componentSearch: document.getElementById('componentSearch'),
+    categoryFilter: document.getElementById('cmsCategoryFilter'),
 
     // PROGRESS & LOGGING
     progressCircle: document.getElementById('cmsProgressCircle'),
@@ -212,15 +218,22 @@ safeBind(ui.btnAddComponent, 'onclick', () => {
 
 // SIDEBAR TAB SWITCHING
 const switchSidebarTab = (tabId) => {
-    const isChanges = tabId === 'tabChanges';
-    ui.tabChanges.classList.toggle('active', isChanges);
-    ui.tabComponents.classList.toggle('active', !isChanges);
-    ui.viewChanges.style.display = isChanges ? 'flex' : 'none';
-    ui.viewComponents.style.display = isChanges ? 'none' : 'flex';
+    ui.tabChanges.classList.toggle('active', tabId === 'tabChanges');
+    ui.tabComponents.classList.toggle('active', tabId === 'tabComponents');
+    ui.tabAssets.classList.toggle('active', tabId === 'tabAssets');
+    
+    ui.viewChanges.style.display = tabId === 'tabChanges' ? 'flex' : 'none';
+    ui.viewComponents.style.display = tabId === 'tabComponents' ? 'flex' : 'none';
+    ui.viewAssets.style.display = tabId === 'tabAssets' ? 'flex' : 'none';
+    
+    // Auto-scan on Switch
+    if (tabId === 'tabComponents') scanProjectComponents();
+    if (tabId === 'tabAssets') scanProjectAssets();
 };
 
 safeBind(ui.tabChanges, 'onclick', () => switchSidebarTab('tabChanges'));
 safeBind(ui.tabComponents, 'onclick', () => switchSidebarTab('tabComponents'));
+safeBind(ui.tabAssets, 'onclick', () => switchSidebarTab('tabAssets'));
 
 safeBind(ui.btnConfirmExtract, 'onclick', () => {
     const name = ui.extractNameInput.value.trim();
@@ -337,15 +350,142 @@ window.addEventListener('message', async (e) => {
 });
 
 // COMPONENT LIBRARY HELPERS
+let allComponents = [];
+let activeCategory = 'all';
+
 const scanProjectComponents = async () => {
     if (!cmsService) return;
-    const components = await cmsService.listComponents();
-    if (components.length > 0) {
-        ui.componentList.innerHTML = '';
-        components.forEach(comp => renderComponentCard(comp));
+    allComponents = await cmsService.listComponents();
+    
+    if (allComponents.length > 0) {
         if (ui.btnAddComponent) ui.btnAddComponent.style.display = 'flex';
+        renderCategoryFilters();
+        renderComponentList();
     }
 };
+
+const renderCategoryFilters = () => {
+    if (!ui.categoryFilter) return;
+    
+    const categories = ['all', ...new Set(allComponents.map(c => c.category))];
+    ui.categoryFilter.innerHTML = categories.map(cat => `
+        <div class="category-pill ${activeCategory === cat ? 'active' : ''}" 
+             data-category="${cat}" 
+             onclick="setCategoryFilter('${cat}')">
+            ${cat === 'all' ? 'All' : cat}
+        </div>
+    `).join('');
+};
+
+window.setCategoryFilter = (cat) => {
+    activeCategory = cat;
+    renderCategoryFilters();
+    renderComponentList();
+};
+
+const renderComponentList = () => {
+    const query = ui.componentSearch?.value.toLowerCase() || '';
+    
+    const filtered = allComponents.filter(comp => {
+        const matchesQuery = comp.name.toLowerCase().includes(query) || 
+                           comp.category.toLowerCase().includes(query);
+        const matchesCategory = activeCategory === 'all' || comp.category === activeCategory;
+        return matchesQuery && matchesCategory;
+    });
+
+    if (filtered.length === 0) {
+        ui.componentList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No components matching your search.</div>';
+        return;
+    }
+
+    ui.componentList.innerHTML = '';
+    
+    // Group by category for visual clarity
+    const groups = {};
+    filtered.forEach(comp => {
+        if (!groups[comp.category]) groups[comp.category] = [];
+        groups[comp.category].push(comp);
+    });
+
+    Object.keys(groups).sort().forEach(category => {
+        const header = document.createElement('div');
+        header.className = 'component-section-header';
+        header.textContent = category;
+        ui.componentList.appendChild(header);
+        
+        groups[category].forEach(comp => renderComponentCard(comp));
+    });
+};
+// ASSET LIBRARY HELPERS
+const scanProjectAssets = async () => {
+    if (!cmsService) return;
+    const assets = await cmsService.listAssets();
+    ui.assetList.innerHTML = '';
+    
+    if (assets.length === 0) {
+        ui.assetList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem; grid-column: 1 / -1;">No assets found in /public.</div>';
+    } else {
+        assets.forEach(asset => renderAssetCard(asset));
+    }
+};
+
+const renderAssetCard = (asset) => {
+    const card = document.createElement('div');
+    card.className = 'asset-card';
+    card.innerHTML = `
+        <div class="asset-preview">
+            ${asset.type === 'svg' ? `<img src="${asset.url}" style="object-fit:contain; padding:10px;">` : `<img src="${asset.url}">`}
+        </div>
+        <div class="asset-actions">
+            <div class="action-chip" onclick="event.stopPropagation(); copyToClipboard('${asset.url}')">Path</div>
+        </div>
+        <div class="asset-info">
+            <div class="asset-name" title="${asset.name}">${asset.name}</div>
+            <div class="asset-meta">${asset.type.toUpperCase()} • ${asset.url}</div>
+        </div>
+    `;
+    ui.assetList.appendChild(card);
+};
+
+window.copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copied: ${text}`, 'success');
+    });
+};
+
+// UPLOAD HANDLER
+if (ui.assetDropZone) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        ui.assetDropZone.addEventListener(name, (e) => {
+            e.preventDefault(); e.stopPropagation();
+        }, false);
+    });
+
+    ui.assetDropZone.addEventListener('dragenter', () => ui.assetDropZone.classList.add('active'));
+    ui.assetDropZone.addEventListener('dragover', () => ui.assetDropZone.classList.add('active'));
+    ui.assetDropZone.addEventListener('dragleave', () => ui.assetDropZone.classList.remove('active'));
+    ui.assetDropZone.addEventListener('drop', async (e) => {
+        ui.assetDropZone.classList.remove('active');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            showToast(`Uploading ${files.length} file(s)...`, 'info');
+            for (let file of files) {
+                try {
+                    await cmsService.saveAsset(file);
+                } catch (err) {
+                    showToast(`Failed to upload ${file.name}`, 'error');
+                }
+            }
+            showToast('Upload complete!', 'success');
+            scanProjectAssets();
+        }
+    });
+}
+
+// Real-time search listener
+if (ui.componentSearch) {
+    ui.componentSearch.oninput = () => renderComponentList();
+}
 
 const renderComponentCard = (comp) => {
     const placeholder = ui.componentList.querySelector('div[style*="text-align:center"]');
