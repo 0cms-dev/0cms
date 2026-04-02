@@ -49,11 +49,25 @@ export class WebContainerGitService {
     // Reset if a different repository is requested
     if (this.repoUrl && this.repoUrl !== requestedRepoUrl) {
         this.onLog(`[Service] Repository changed from ${this.repoUrl} to ${requestedRepoUrl}. Performing reset...`);
-        if (this.serverProcess) this.serverProcess.kill();
-        if (this.middlewareProc) this.middlewareProc.kill();
+        if (this.serverProcess) {
+            this.serverProcess.kill();
+            this.serverProcess = null;
+        }
+        if (this.middlewareProc) {
+            this.middlewareProc.kill();
+            this.middlewareProc = null;
+        }
         this.serverUrl = null;
         this.middlewareStarted = false;
+        this._modifiedFiles.clear();
+        
+        // STABILITY: Small delay to let OS release ports
+        await new Promise(r => setTimeout(r, 500));
+        
         await this.wipeDir(this.dir).catch(() => {});
+        if (this.webcontainerInstance) {
+            await this.wipeWebContainerFS();
+        }
     }
 
     if (this.serverUrl) {
@@ -189,31 +203,47 @@ export class WebContainerGitService {
   }
 
   /**
-   * Syncs files from lightning-fs (browser persistence) to WebContainer FS (WASM runtime)
+   * Generates a FileSystemTree from LightningFS to be used with WebContainer.mount()
    */
-  async syncToWebContainer() {
-    const files = await this.readDirRecursive(this.dir);
+  async generateFileSystemTree(dir) {
+    const tree = {};
+    const entries = await this.fs.readdir(dir);
     
-    // 1. Create all directories first (sequential to ensure order)
-    for (const file of files) {
-      if (file.type === 'dir') {
-        const relativePath = file.path.replace(this.dir, '');
-        if (relativePath) {
-          await this.webcontainerInstance.fs.mkdir(relativePath, { recursive: true });
-        }
+    for (const entry of entries) {
+      if (entry === '.git' || entry === 'node_modules') continue;
+      const path = `${dir}/${entry}`;
+      const stat = await this.fs.stat(path);
+      
+      if (stat.isDirectory()) {
+        tree[entry] = {
+          directory: await this.generateFileSystemTree(path)
+        };
+      } else {
+        const contents = await this.fs.readFile(path);
+        tree[entry] = {
+          file: { contents }
+        };
       }
     }
+    return tree;
+  }
+
+  /**
+   * Turbo Boot: Syncs files using WebContainer.mount() for near-instant boot.
+   */
+  async syncToWebContainer() {
+    this.onStatusChange('Syncing Files (Turbo)...');
     
-    // 2. Write all files in parallel
-    const fileWrites = files
-      .filter(f => f.type === 'file')
-      .map(async (file) => {
-        const relativePath = file.path.replace(this.dir, '');
-        const content = await this.fs.readFile(file.path);
-        return this.webcontainerInstance.fs.writeFile(relativePath, content);
-      });
-      
-    await Promise.all(fileWrites);
+    // 1. Build the virtual tree for the repo directory
+    const repoTree = await this.generateFileSystemTree(this.dir);
+    
+    // 2. Mount it as '/repo' in the WebContainer
+    await this.webcontainerInstance.mount({
+       repo: {
+         directory: repoTree
+       }
+    });
+
     await this.startMiddleware();
   }
 
@@ -261,21 +291,36 @@ export class WebContainerGitService {
           this.onLog(`[Auto-Detect] Matched Driver: ${this.activeDriver.name}`);
           
           // NEW: ACTIVATE SUPER TAGGER (WASM)
-          await this.tagger.initWasm().catch(() => {});
+          await this.tagger.initWasm().catch(e => {
+              this.onLog(`[WebContainer] [Fallback] WASM Tagger failed to load: ${e.message}. Using JS engine.`);
+          });
 
           // NEW: DETERMINISTIC INSTRUMENTATION (BATCHED)
           this.onLog(`[Instrumentation] Injecting invisible Unicode breadcrumbs (Batch: ${this.tagger.activeEngine.constructor.name})...`);
           
           const contentFiles = [];
-          for (const dir of this.activeDriver.routing.contentPaths) {
-              const files = await this.tagger.recursiveReaddir(dir.startsWith('/') ? dir : '/' + dir);
-              contentFiles.push(...files.filter(f => f.endsWith('.md') || f.endsWith('.json')));
+          if (this.activeDriver.routing && this.activeDriver.routing.contentPaths) {
+              for (const dir of this.activeDriver.routing.contentPaths) {
+                  // RESOLVE PATH relative to project root
+                  const fullDir = (this.dir + '/' + dir).replace(/\/+/g, '/');
+                  try {
+                      const files = await this.tagger.recursiveReaddir(fullDir);
+                      contentFiles.push(...files.filter(f => 
+                          f.endsWith('.md') || f.endsWith('.mdx') || 
+                          f.endsWith('.json') || f.endsWith('.yaml') || f.endsWith('.yml') ||
+                          f.endsWith('.js') || f.endsWith('.jsx') || f.endsWith('.ts') || f.endsWith('.tsx')
+                      ));
+                  } catch (e) {
+                      // Silent skip for expected framework variations
+                  }
+              }
           }
-          
+
           const startTime = performance.now();
-          await this.tagger.instrumentBatch(contentFiles);
+          if (contentFiles.length > 0) {
+              await this.tagger.instrumentBatch(contentFiles);
+          }
           const duration = (performance.now() - startTime).toFixed(2);
-          
           this.onLog(`[Instrumentation] Completed: ${contentFiles.length} files in ${duration}ms.`);
       } else {
           this.onLog('[Auto-Detect] No specific driver matched. Using generic fail-safe.');
@@ -307,24 +352,31 @@ export class WebContainerGitService {
   async installDependencies() {
     // PRO-TIP: Check if node_modules already exists from a previous sync
     // This makes repeat-boots extremely fast.
-    const hasModules = await this.webcontainerInstance.fs.readdir('/node_modules').then(e => e.length > 0).catch(() => false);
+    const hasModules = await this.webcontainerInstance.fs.readdir('/repo/node_modules').then(e => e.length > 0).catch(() => false);
     if (hasModules) {
       this.onLog('Reuse existing node_modules detected.');
       return;
     }
     
     this.onStatusChange('Installing Dependencies...');
-    const installProcess = await this.webcontainerInstance.spawn('npm', ['install']);
+    const installProcess = await this.webcontainerInstance.spawn('npm', ['install'], {
+        cwd: 'repo'
+    });
     
-    // Log output only in dev mode
+    let lastOutput = '';
     installProcess.output.pipeTo(new WritableStream({
       write: (data) => {
+          lastOutput = data;
+          this.onLog(`[npm] ${data}`);
           if (this.isDevMode) console.log('[npm install]', data);
       }
     }));
 
     const exitCode = await installProcess.exit;
-    if (exitCode !== 0) throw new Error('npm install failed');
+    if (exitCode !== 0) {
+        this.onLog(`[Error] npm install failed (Exit: ${exitCode}): ${lastOutput}`);
+        throw new Error('npm install failed');
+    }
   }
 
   async startDevServer(manualCommand = null) {
@@ -333,7 +385,7 @@ export class WebContainerGitService {
     // Auto-detection logic if no manual command provided
     if (!devCommand) {
       try {
-        const pkgRaw = await this.webcontainerInstance.fs.readFile('/package.json', 'utf8').catch(() => null);
+        const pkgRaw = await this.webcontainerInstance.fs.readFile('/repo/package.json', 'utf8').catch(() => null);
         if (pkgRaw) {
           const pkg = JSON.parse(pkgRaw);
           const scripts = pkg.scripts || {};
@@ -343,17 +395,11 @@ export class WebContainerGitService {
           else if (scripts.start) devCommand = 'npm run start';
           else if (scripts.server) devCommand = 'npm run server';
         }
-
-        // 2. Fallback to framework default command if no package scripts matched
-        if (!devCommand && this.activeDriver) {
-            devCommand = this.activeDriver.server.getDevCommand();
-            this.onLog(`[Auto-Detect] Using driver default command: ${devCommand}`);
-        }
       } catch (e) {
         this.onLog(`[Warning] Error deciding dev command: ${e.message}`);
       }
     }
-
+    
     // Default fallback
     if (!devCommand) devCommand = 'npm run dev';
 
@@ -361,59 +407,59 @@ export class WebContainerGitService {
     if (this.serverProcess) {
        this.onLog('[Cleanup] Stopping previous dev server...');
        this.serverProcess.kill();
+       this.serverProcess = null;
     }
-    if (this.middlewareProc) {
-       this.onLog('[Cleanup] Stopping previous CMS bridge...');
-       this.middlewareProc.kill();
+    await new Promise(r => setTimeout(r, 400));
+
+    // 1. Listen for the server-ready event of WebContainers
+    if (!this._serverReadyListenerAttached) {
+        this.webcontainerInstance.on('server-ready', async (port, url) => {
+          if (port === 3001) {
+            this.serverUrl = url;
+            // STABILITY DELAY: 3.5s buffer for cold boots
+            setTimeout(() => {
+              this.onServerReady(url);
+              this.onStatusChange('Server Ready!');
+            }, 3500);
+          }
+          
+          // a. If it's the first port (not our middleware), start the middleware
+          if (port !== 3001 && !this.middlewareStarted) {
+            this.middlewareStarted = true;
+            this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
+            
+            try {
+              this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
+                env: { TARGET_PORT: port }
+              });
+    
+              this.middlewareProc.output.pipeTo(new WritableStream({
+                write: (data) => this.onLog(`[bridge] ${data}`)
+              }));
+            } catch (e) {
+              this.onLog(`[Error] Failed to start middleware: ${e.message}`);
+              this.middlewareStarted = false; // Reset on failure
+            }
+          }
+        });
+        this._serverReadyListenerAttached = true;
     }
-
-    // 1. Listen for the server-ready event of WebContainers BEFORE spawning
-    // This avoids a race condition where the server starts faster than we attach the listener.
-    this.webcontainerInstance.on('server-ready', async (port, url) => {
-      // a. If it's the first port (not our middleware), start the middleware
-      if (port !== 3001 && !this.middlewareStarted) {
-        this.middlewareStarted = true;
-        this.onLog(`[Middleware] SSG detected on port ${port}. Launching CMS Bridge...`);
-        
-        try {
-          this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
-            env: { TARGET_PORT: port }
-          });
-
-          this.middlewareProc.output.pipeTo(new WritableStream({
-            write: (data) => this.onLog(`[bridge] ${data}`)
-          }));
-        } catch (e) {
-          this.onLog(`[Error] Failed to start middleware: ${e.message}`);
-          this.middlewareStarted = false; // Reset on failure
-        }
-      }
-
-      // b. If it's our middleware port, we are ready to preview!
-      if (port === 3001) {
-        this.serverUrl = url;
-        this.onLog(`[Middleware] CMS Bridge Ready! Loading preview...`);
-        this.onServerReady(url);
-        this.onStatusChange('Server Ready!');
-      }
-    });
 
     this.onStatusChange(`Running: ${devCommand}...`);
     const cmdTokens = devCommand.split(' ');
     const cmd = cmdTokens[0];
     const args = cmdTokens.slice(1);
     
-    this.serverProcess = await this.webcontainerInstance.spawn(cmd, args);
-    const serverProcess = this.serverProcess;
+    this.serverProcess = await this.webcontainerInstance.spawn(cmd, args, { cwd: 'repo' });
     
-    serverProcess.output.pipeTo(new WritableStream({
+    this.serverProcess.output.pipeTo(new WritableStream({
       write: (data) => {
           if (this.isDevMode) console.log(`[server] ${data}`);
       }
     }));
 
     this.middlewareStarted = false;
-    return serverProcess;
+    return this.serverProcess;
   }
 
   /**
@@ -553,7 +599,9 @@ export class WebContainerGitService {
       await this.webcontainerInstance.fs.writeFile(filePath, content);
       const absPath = filePath.startsWith('/') ? filePath : '/' + filePath;
       // Don't track auto-generated SSG cache files - they're in .gitignore anyway
-      const isGenerated = absPath.includes('db.json') || absPath.includes('/.cache/') || absPath.includes('/.astro/') || absPath.includes('/public/');
+      // EXCEPTION: Allow db.json if it is actually in the root, as some drivers use it
+      const isGenerated = absPath.includes('/.cache/') || absPath.includes('/.astro/') || absPath.includes('/public/');
+      
       if (!isGenerated) {
         this._modifiedFiles.add(absPath);
         this.onLog(`[SmartMatch] ✓ Wrote changes to ${filePath}`);
@@ -973,5 +1021,22 @@ export class WebContainerGitService {
     
     // Also trigger snapshot of modules while we're at it
     this.saveSnapshot();
+  }
+
+  async wipeWebContainerFS() {
+    this.onLog('[Service] Wiping WebContainer filesystem...');
+    try {
+      const entries = await this.webcontainerInstance.fs.readdir('/', { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name === 'tmp') continue; // Keep tmp if it exists
+        try {
+          await this.webcontainerInstance.fs.rm(entry.name, { recursive: true });
+        } catch (e) {
+          this.onLog(`[Warning] Could not remove ${entry.name}: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      this.onLog(`[Error] Failed to wipe WebContainer FS: ${e.message}`);
+    }
   }
 }

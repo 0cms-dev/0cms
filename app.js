@@ -82,7 +82,12 @@ const ui = isHostApp ? {
     btnExtractMode: document.getElementById('btnExtractMode'),
     extractPanel: document.getElementById('cmsExtractPanel'),
     extractNameInput: document.getElementById('extractComponentName'),
-    btnConfirmExtract: document.getElementById('btnConfirmExtract')
+    btnConfirmExtract: document.getElementById('btnConfirmExtract'),
+    
+    // PROGRESS & LOGGING
+    progressCircle: document.getElementById('cmsProgressCircle'),
+    terminal: document.getElementById('cmsTerminalText'),
+    terminalOverlay: document.getElementById('cmsTerminalOverlay')
 } : {};
 
 
@@ -448,7 +453,7 @@ window.addEventListener('message', (e) => {
     }
     
     if (e.data.type === 'CMS_READY') {
-        showToast('Visual Editor Ready', 'success');
+        // showToast('Visual Editor Ready', 'success'); // Redundant when spinner hides
         if (ui.previewLoader) {
             ui.previewLoader.style.opacity = '0';
             setTimeout(() => {
@@ -458,7 +463,8 @@ window.addEventListener('message', (e) => {
         }
         if (ui.statusLabel) {
             ui.statusLabel.textContent = '0 unsaved changes';
-            ui.statusLabel.style.color = 'var(--text-muted)';
+            ui.statusLabel.style.color = 'var(--text)';
+            ui.statusLabel.style.opacity = '0.7';
         }
         const statusIcon = document.getElementById('cmsStatusIcon');
         if (statusIcon) statusIcon.style.stroke = 'var(--text-muted)';
@@ -474,7 +480,8 @@ window.addEventListener('message', (e) => {
         
         ui.saveBtn.style.display = count > 0 ? 'inline-flex' : 'none';
         ui.statusLabel.textContent = `${count} unsaved change${count !== 1 ? 's' : ''}`;
-        ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text)';
+        ui.statusLabel.style.opacity = count > 0 ? '1' : '0.7';
         
         const statusIcon = document.getElementById('cmsStatusIcon');
         if (statusIcon) statusIcon.style.stroke = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
@@ -618,15 +625,49 @@ async function startCmsEngine(repo, token, demo = false) {
     }
     cmsService = preWarmingService;
     
+    let bootLogBuffer = '';
     cmsService.onLog = (msg) => {
-        console.log(`%c[WebContainer] %c${msg}`, 'color:#a78bfa; font-weight:bold;', 'color:inherit;');
-        if (msg.toLowerCase().includes('error')) console.error(`[WebContainer Error] ${msg}`);
+        bootLogBuffer += (msg + '\n');
+        if (ui.terminal) {
+            ui.terminal.textContent = bootLogBuffer;
+            ui.terminal.scrollTop = ui.terminal.scrollHeight;
+        }
+        console.log(`[WebContainer] ${msg}`);
     };
-
-    cmsService.onStatusChange = (msg) => {
-        if (ui.loaderStatus) ui.loaderStatus.textContent = msg;
-        showToast(msg, 'info');
-        console.log(`%c[Status] %c${msg}`, 'color:#34d399; font-weight:bold;', 'color:inherit;');
+    
+    cmsService.onStatusChange = (status) => {
+        if (ui.loaderStatus) ui.loaderStatus.textContent = status;
+        
+        // ONLY update HUD label if we are NOT booting or if it's the final ready state
+        if (status === 'Server Ready!') {
+            if (ui.statusLabel) ui.statusLabel.textContent = '0 unsaved changes';
+            document.documentElement.classList.remove('booting');
+        } else {
+            // During boot, we can show status in HUD too, or keep it clean. 
+            // User said: "unten im hud sollen die changes sichtbar sein!"
+            // So we show 0 changes until actual changes happen.
+            if (ui.statusLabel) ui.statusLabel.textContent = '0 unsaved changes';
+            document.documentElement.classList.add('booting');
+        }
+        
+        // Progress Ring Mapping (Center Ring)
+        const progressMap = {
+            'Initializing...': 10,
+            'Syncing Files (Turbo)...': 30,
+            'Preparing Environment...': 50,
+            'Installing Dependencies...': 70,
+            'Starting Dev Server...': 85,
+            'Server Ready!': 100
+        };
+        
+        const progress = progressMap[status] || 0;
+        if (progress > 0 && ui.progressCircle) {
+            const radius = 36;
+            const circumference = 2 * Math.PI * radius; // ~226
+            const offset = circumference - (progress / 100) * circumference;
+            ui.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+            ui.progressCircle.style.strokeDashoffset = offset;
+        }
     };
 
     cmsService.onServerReady = (url) => {
@@ -639,8 +680,6 @@ async function startCmsEngine(repo, token, demo = false) {
 
         ui.preview.src = url;
         ui.statusLabel.textContent = 'Website Ready';
-        ui.statusDot.className = 'status-dot';
-        showToast('Editor ready!', 'success');
         
         // Auto-enable Zen Editor on load
         ui.preview.onload = () => {
@@ -661,7 +700,6 @@ async function startCmsEngine(repo, token, demo = false) {
     if (cmsService.serverUrl) {
         ui.preview.src = cmsService.serverUrl;
         ui.statusLabel.textContent = cmsService.serverUrl;
-        ui.statusDot.className = 'status-dot';
         
         // ACTIVATE RUNTIME BRIDGE: Ensure PHP/Python/Rust preview is ready
         if (cmsService.activeDriver) {
@@ -676,7 +714,7 @@ async function startCmsEngine(repo, token, demo = false) {
 
     // Await background pre-warm if active
     if (preWarmPromise) {
-        showToast('Synchronizing engine...', 'info');
+        // showToast('Synchronizing engine...', 'info'); // Silence background status
         await preWarmPromise;
     }
     
@@ -700,6 +738,11 @@ async function startCmsEngine(repo, token, demo = false) {
             if (cmsService.activeDriver) {
                 WasmBridge.getInstance().activate(cmsService.activeDriver.id);
             }
+        } catch (e) {
+            console.error('[CMS Service] Boot failed:', e);
+            ui.loaderStatus.textContent = `Boot Failed: ${e.message}`;
+            showToast(`Boot Failed. <a href="#" onclick="toggleTerminal(); return false;" style="color:white; text-decoration:underline; margin-left:8px;">Show Logs</a>`, 'error');
+            document.documentElement.classList.remove('booting');
         } finally {
             clearTimeout(bootWatchdog);
         }
@@ -713,6 +756,14 @@ async function startCmsEngine(repo, token, demo = false) {
         }
     }
 }
+
+// Global Terminal Toggle
+window.toggleTerminal = () => {
+    const term = document.getElementById('cmsTerminalOverlay');
+    if (!term) return;
+    const isVisible = term.style.display === 'block';
+    term.style.display = isVisible ? 'none' : 'block';
+};
 
 // 0. UI REFRESH: Project Awareness
 async function refreshLandingUI() {
@@ -986,16 +1037,33 @@ function selectRepo(name) {
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
     ui.stepPicker.classList.add('hidden');
     
+    // Clear State for the new project
+    changes = {};
+    entries = [];
+    ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
+    ui.historyCount.textContent = '0';
+    ui.preview.src = 'about:blank';
+    
+    // Show Loader for the new project
+    if (ui.previewLoader) {
+        ui.previewLoader.style.display = 'flex';
+        ui.previewLoader.classList.remove('hidden');
+        ui.previewLoader.style.opacity = '1';
+        ui.loaderStatus.textContent = `Initializing ${name.split('/')[1]}...`;
+    }
+    
     // Clear Demo state when selecting a real project
     isDemoMode = false;
     document.documentElement.classList.remove('demo-mode');
     document.documentElement.classList.remove('demo-mode-child');
     
     refreshLandingUI();
+    
+    // Explicitly open the dashboard UI first for immediate feedback
+    window.openDashboard();
+    
     // Start the engine
     startCmsEngine(name, getActiveToken());
-    // Explicitly open the dashboard UI and force visibility
-    window.openDashboard();
 }
 
 function showToast(msg, type) {
