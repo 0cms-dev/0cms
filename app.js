@@ -55,7 +55,6 @@ const ui = isHostApp ? {
     landingRepoList: document.getElementById('landingRepoList'),
     btnToggleLanding: document.getElementById('toggleCmsBtnLanding'),
     historyList: document.getElementById('cmsHistoryList'),
-    historyCount: document.getElementById('cmsHistoryCount'),
     loaderStatus: document.getElementById('cmsLoaderStatus'),
     viewDesktop: document.getElementById('viewDesktop'),
     viewTablet: document.getElementById('viewTablet'),
@@ -234,40 +233,22 @@ safeBind(ui.btnConfirmExtract, 'onclick', () => {
 });
 
 // Listener for extracted data from bridge (Universal Components)
+// Listener for generic postMessages from iframe
 window.addEventListener('message', async (e) => {
+    // 1. UNIVERSAL COMPONENT CAPTURE
     if (e.data.type === 'CMS_COMPONENT_CAPTURED') {
         const { name, html } = e.data;
         if (!cmsService) return;
         
-        // 1. Show the "+ Add" button in the HUD
         if (ui.btnAddComponent) ui.btnAddComponent.style.display = 'flex';
-        
-        // 2. Render Card in Sidebar
-        const card = document.createElement('div');
-        card.className = 'component-card';
-        card.innerHTML = `
-            <div class="component-card-preview">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.3"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-            </div>
-            <div class="component-card-name">${name}</div>
-            <div class="component-card-meta">HTML Fragment • Cleaned</div>
-        `;
-        
-        // Long term: insertion logic. Short term: just render.
-        ui.componentList.prepend(card);
-        
-        // Remove "No components found" placeholder
-        const placeholder = ui.componentList.querySelector('div[style*="text-align:center"]');
-        if (placeholder) placeholder.remove();
-
-        showToast(`Component "${name}" discovered! Check the Library.`, 'success');
-        
-        // Write to project if needed (optional for discovery)
-        const path = `/src/components/zcms/${name.toLowerCase().replace(/\s+/g, '_')}.html`;
+        const path = `/repo/src/components/zcms/${name.toLowerCase().replace(/\s+/g, '_')}.html`;
         await cmsService.updateFile(path, html);
+        
+        renderComponentCard({ name, html });
+        showToast(`Component "${name}" discovered!`, 'success');
     }
 
-    // DETERMINISTIC SOURCE MAPPING HANDLER
+    // 2. DETERMINISTIC SOURCE MAPPING
     if (e.data.type === 'CMS_SOURCE_LOCATED') {
         const { fileId, line, selector } = e.data;
         activeSourceMetadata = { fileId, line, selector };
@@ -275,7 +256,6 @@ window.addEventListener('message', async (e) => {
         if (cmsService) {
             const path = cmsService.tagger.pathMap.get(fileId);
             if (path) {
-                // Central Status Messaging (No HUD changes)
                 const filename = path.split('/').pop();
                 if (ui.loaderStatus) {
                     ui.loaderStatus.textContent = `Source Verified: ${filename} (Line ${line})`;
@@ -283,7 +263,6 @@ window.addEventListener('message', async (e) => {
                     ui.previewLoader.classList.remove('hidden');
                     ui.previewLoader.style.opacity = '1';
                     
-                    // Fade out after a moment
                     setTimeout(() => {
                         if (ui.loaderStatus.textContent.includes('Source Verified')) {
                             ui.previewLoader.style.opacity = '0';
@@ -297,7 +276,128 @@ window.addEventListener('message', async (e) => {
             }
         }
     }
+
+    // 3. SEO DATA RECEPTION
+    if (e.data.type === 'CMS_SEO_DATA') {
+        ui.seoTitle.value = e.data.title || '';
+        ui.seoDesc.value = e.data.description || '';
+        ui.seoImage.value = e.data.image || '';
+    }
+    
+    // 4. CMS READY SIGNAL
+    if (e.data.type === 'CMS_READY') {
+        if (ui.previewLoader) {
+            ui.previewLoader.style.opacity = '0';
+            setTimeout(() => {
+                ui.previewLoader.style.display = 'none';
+                ui.previewLoader.classList.add('hidden');
+            }, 500);
+        }
+        if (ui.statusLabel) {
+            ui.statusLabel.textContent = '0 unchanged changes';
+            ui.statusLabel.style.color = 'var(--text-muted)';
+            ui.statusLabel.style.opacity = '0.7';
+        }
+        const statusIcon = document.getElementById('cmsStatusIcon');
+        if (statusIcon) statusIcon.style.stroke = 'var(--text-muted)';
+        
+        ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
+    }
+
+    // 5. CHANGE TRACKING
+    if (e.data.type === 'CMS_CHANGED') {
+        const count = Object.keys(e.data.changes).length;
+        changes = e.data.changes;
+        entries = e.data.entries || [];
+        
+        if (ui.historyCount) ui.historyCount.textContent = count;
+        if (ui.statusLabel) {
+            ui.statusLabel.textContent = `${count} unchanged change${count !== 1 ? 's' : ''}`;
+            ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        }
+        
+        // Autosync logic
+        if (entries.length > 0 && cmsService) {
+            const lastEntry = entries[entries.length - 1];
+            if (lastEntry.original && lastEntry.updated && lastEntry.original !== lastEntry.updated) {
+                 const metadata = (activeSourceMetadata && activeSourceMetadata.selector === lastEntry.selector) ? activeSourceMetadata : null;
+                 cmsService.applySmartMatchChange(lastEntry.original, lastEntry.updated, metadata).then(async (result) => {
+                    if (result && result.path && result.content) {
+                        WasmBridge.getInstance().syncFile(result.path, result.content);
+                        IframeSyncService.getInstance().sync(ui.preview, ui.preview.src, result.markerId);
+                    }
+                 }).catch(err => console.error('[CMS] Autosync failed:', err));
+            }
+        }
+        
+        if (ui.historyList) {
+            renderHistoryList(count, entries);
+        }
+    }
 });
+
+// COMPONENT LIBRARY HELPERS
+const scanProjectComponents = async () => {
+    if (!cmsService) return;
+    const components = await cmsService.listComponents();
+    if (components.length > 0) {
+        ui.componentList.innerHTML = '';
+        components.forEach(comp => renderComponentCard(comp));
+        if (ui.btnAddComponent) ui.btnAddComponent.style.display = 'flex';
+    }
+};
+
+const renderComponentCard = (comp) => {
+    const placeholder = ui.componentList.querySelector('div[style*="text-align:center"]');
+    if (placeholder) placeholder.remove();
+
+    const card = document.createElement('div');
+    card.className = 'component-card';
+    card.innerHTML = `
+        <div class="component-card-preview">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.3"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+        </div>
+        <div class="component-card-name">${comp.name}</div>
+        <div class="component-card-meta">HTML Fragment • Cleaned</div>
+    `;
+    card.onclick = () => {
+        showToast('Entering Insertion Mode. Click anywhere in the preview to place this component.', 'info');
+        ui.preview.contentWindow.postMessage({ type: 'CMS_ENTER_INSERT_MODE', html: comp.html, name: comp.name }, '*');
+    };
+    ui.componentList.prepend(card);
+};
+
+// HISTORY RENDERER
+const renderHistoryList = (count, entries) => {
+    if (count === 0) {
+        ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
+        return;
+    }
+    const displayEntries = [...entries].reverse();
+    ui.historyList.innerHTML = displayEntries.map(entry => {
+        const oldVal = (entry.original || '').trim();
+        const newVal = (entry.updated || '').trim();
+        const isImage = newVal.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || (newVal.startsWith('http') && (oldVal.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || oldVal === ''));
+        const displayOld = oldVal.length > 50 ? oldVal.substring(0, 50) + '...' : oldVal;
+        const displayNew = newVal.length > 50 ? newVal.substring(0, 50) + '...' : newVal;
+        const label = entry.selector.startsWith('seo:') ? entry.selector.replace('seo:', 'SEO ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : entry.selector;
+
+        return `
+            <div class="history-item" onclick="${entry.selector.startsWith('seo:') ? '' : `highlightElement('${entry.selector}')`}">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span class="history-item-label" style="font-size:0.75rem; opacity:0.6; display:flex; align-items:center; gap:4px;">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        ${entry.time}
+                        ${entry.selector.startsWith('seo:') ? `• <span style="color:var(--primary); font-weight:700;">${label}</span>` : ''}
+                    </span>
+                    <button class="btn-undo" onclick="event.stopPropagation(); undoChange('${entry.selector}')">Revert</button>
+                </div>
+                <div class="history-item-diff">
+                    ${isImage ? `<img src="${newVal}" style="width:40px; height:40px; object-fit:cover;">` : `<div class="diff-old">${displayOld || '(Empty)'}</div><div class="diff-new">${displayNew || '(Empty)'}</div>`}
+                </div>
+            </div>`;
+    }).join('');
+};
 
 window.openDashboard = async () => {
     if (!ui.dashboard) return;
@@ -386,8 +486,14 @@ window.startDemoMode = async () => {
 safeBind(ui.btnToggleLanding, 'onclick', window.openDashboard);
 safeBind(ui.navDemoBtn, 'onclick', () => window.startDemoMode());
 
-safeBind(ui.btnClose, 'onclick', () => {
+safeBind(ui.btnClose, 'onclick', async () => {
     ui.dashboard.classList.remove('active');
+    
+    // RELIABLE SESSION MANAGEMENT: Shutdown engine on close
+    if (cmsService) {
+        await cmsService.shutdown();
+    }
+
     setTimeout(() => {
         ui.dashboard.style.display = 'none';
         document.documentElement.classList.remove('demo-mode');
@@ -518,6 +624,24 @@ window.addEventListener('message', (e) => {
         
         // FORCE ENABLE BRIDGE
         ui.preview.contentWindow.postMessage({ type: 'CMS_TOGGLE', enabled: true }, '*');
+
+        // SILENT RESTORE: If we have persisted changes, send them to the bridge
+        if (cmsService && cmsService.repoUrl) {
+           const saved = localStorage.getItem(`zcms-session-${cmsService.repoUrl}`);
+           if (saved) {
+              try {
+                 const data = JSON.parse(saved);
+                 if (data.changes && Object.keys(data.changes).length > 0) {
+                    console.log(`[0CMS] Silently restoring ${Object.keys(data.changes).length} unsaved changes...`);
+                    ui.preview.contentWindow.postMessage({ 
+                        type: 'CMS_RESTORE_CHANGES', 
+                        changes: data.changes,
+                        entries: data.entries 
+                    }, '*');
+                 }
+              } catch (e) {}
+           }
+        }
     }
 
     if (e.data.type === 'CMS_CHANGED') {
@@ -527,10 +651,14 @@ window.addEventListener('message', (e) => {
         
         if (ui.historyCount) ui.historyCount.textContent = count;
         
-        // HUD Status Update (Professional Count)
         if (ui.statusLabel) {
             ui.statusLabel.textContent = `${count} unchanged change${count !== 1 ? 's' : ''}`;
             ui.statusLabel.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+        }
+
+        // SILENT SYNC: Trigger background persistence to virtual disk
+        if (cmsService && e.data.changes) {
+            cmsService.syncChangesToDisk(e.data.changes);
         }
 
         // REAL-TIME SYNC: Apply the last change to the WebContainer FS
@@ -548,6 +676,15 @@ window.addEventListener('message', (e) => {
                     metadata
                  ).then(async (result) => {
                     if (result && result.path && result.content) {
+                        if (cmsService && cmsService.repoUrl) {
+                           const persistData = {
+                              url: cmsService.repoUrl,
+                              changes: changes,
+                              entries: entries,
+                              timestamp: Date.now()
+                           };
+                           localStorage.setItem(`zcms-session-${cmsService.repoUrl}`, JSON.stringify(persistData));
+                        }
                         WasmBridge.getInstance().syncFile(result.path, result.content);
                         const currentUrl = ui.preview.src;
                         IframeSyncService.getInstance().sync(ui.preview, currentUrl, result.markerId);
@@ -692,6 +829,8 @@ async function startCmsEngine(repo, token, demo = false) {
         if (status === 'Server Ready!') {
             if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
             document.documentElement.classList.remove('booting');
+            // SYNC LIBRARY ON BOOT
+            scanProjectComponents();
         } else {
             if (ui.statusLabel) ui.statusLabel.textContent = 'Preparing...';
             document.documentElement.classList.add('booting');
@@ -1087,7 +1226,7 @@ function selectRepo(name) {
     changes = {};
     entries = [];
     ui.historyList.innerHTML = '<div style="text-align:center; padding-top:40px; color:var(--text-muted); font-size:0.8rem;">No changes yet.</div>';
-    ui.historyCount.textContent = '0';
+    if (ui.historyCount) ui.historyCount.textContent = '0';
     ui.preview.src = 'about:blank';
     
     // Show Loader for the new project

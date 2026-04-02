@@ -14,6 +14,9 @@ class ZeroCMS {
     this.changes = {};
     this.activeMarker = null;
     this.seoBaseline = { title: '', description: '', image: '' };
+    this.extractMode = false;
+    this.insertMode = false;
+    this.insertFragment = null;
     this.init();
   }
 
@@ -39,6 +42,7 @@ class ZeroCMS {
         if (e.data.type === 'CMS_GET_SEO') this.sendSEO();
         if (e.data.type === 'CMS_EXTRACT_MODE') this.toggleExtractMode(e.data.enabled);
         if (e.data.type === 'CMS_EXTRACT_TRIGGER') this.captureComponent(e.data.name);
+        if (e.data.type === 'CMS_ENTER_INSERT_MODE') this.toggleInsertMode(true, e.data.html);
       });
       window.parent.postMessage({ type: 'CMS_READY' }, '*');
     }
@@ -56,6 +60,12 @@ class ZeroCMS {
 
     // Global Click Listener for Source Mapping & Editing
     document.addEventListener('click', (e) => {
+      if (this.insertMode) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+      }
+
       if (this.extractMode) {
           e.preventDefault();
           e.stopPropagation();
@@ -90,8 +100,39 @@ class ZeroCMS {
     }, true);
   }
 
-  enable() {
+  /**
+   * Framework Detection & Hydration Guard
+   * Ensures the CMS only touches the DOM after the framework (Next.js/React) is stable.
+   */
+  async safeReady() {
+    const isNext = !!window.next;
+    const isReact = !!window.React || document.querySelector('[data-reactroot], [data-react-helmet]');
+    
+    if (isNext && window.next?.router) {
+        // Wait for Next.js Router to be ready
+        if (!window.next.router.isReady) {
+            await new Promise(r => {
+                const check = () => {
+                    if (window.next.router.isReady) r();
+                    else setTimeout(check, 50);
+                };
+                check();
+            });
+        }
+    }
+
+    if (isReact || isNext) {
+        // STABILITY DELAY: Extra buffer for hydration to complete
+        await new Promise(r => {
+            if ('requestIdleCallback' in window) window.requestIdleCallback(() => r());
+            else setTimeout(r, 300);
+        });
+    }
+  }
+
+  async enable() {
     this.active = true;
+    await this.safeReady();
     this.scanAndApply();
   }
 
@@ -290,6 +331,40 @@ class ZeroCMS {
       .cms-highlight { outline: 4px solid #3b82f6 !important; outline-offset: 4px !important; z-index: 110000 !important; box-shadow: 0 0 50px rgba(59, 130, 246, 0.4) !important; animation: cms-pulse 2s infinite !important; }
       @keyframes cms-pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
       .cms-extract-hover { outline: 3px dashed #a855f7 !important; outline-offset: 2px !important; cursor: crosshair !important; box-shadow: 0 0 20px rgba(168, 85, 247, 0.3) !important; background: rgba(168, 85, 247, 0.05) !important; }
+
+      .cms-drop-zone {
+        height: 12px;
+        margin: 8px 0;
+        background: rgba(16, 185, 129, 0.1);
+        border: 2px dashed #10b981;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: cell;
+        transition: all 0.2s ease;
+        overflow: hidden;
+        position: relative;
+        z-index: 9999;
+      }
+      .cms-drop-zone:hover {
+        height: 48px;
+        background: rgba(16, 185, 129, 0.2);
+        border-style: solid;
+      }
+      .cms-drop-zone span {
+        display: none;
+        color: #10b981;
+        font-family: sans-serif;
+        font-size: 0.8rem;
+        font-weight: bold;
+        pointer-events: none;
+      }
+      .cms-drop-zone:hover span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -492,9 +567,63 @@ class ZeroCMS {
     }, '*');
   }
 
+  toggleInsertMode(enabled, html = null) {
+    this.insertMode = enabled;
+    this.insertFragment = html;
+    document.body.classList.toggle('cms-insert-mode', enabled);
+    document.body.style.cursor = enabled ? 'cell' : '';
+    console.log(`%c[0cms] %cInsertion Mode ${enabled ? 'ENABLED' : 'DISABLED'}`, 'color:#10b981; font-weight:bold;', 'color:inherit;');
+    
+    if (enabled) {
+      this.createDropZones();
+    } else {
+      document.querySelectorAll('.cms-drop-zone').forEach(el => el.remove());
+    }
+  }
+
+  createDropZones() {
+    const containers = document.querySelectorAll('main, section, header, footer, .container, body > div');
+    containers.forEach(el => {
+      if (el.children.length === 0) return;
+      this.addDropZone(el, 'afterbegin');
+      for (const child of el.children) {
+        if (!child.classList.contains('cms-drop-zone')) {
+            this.addDropZone(child, 'afterend');
+        }
+      }
+    });
+  }
+
+  addDropZone(target, position) {
+    const dz = document.createElement('div');
+    dz.className = 'cms-drop-zone';
+    dz.innerHTML = '<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Drop Here</span>';
+    dz.onclick = (e) => {
+      e.stopPropagation();
+      this.insertBlock(dz, this.insertFragment);
+    };
+    target.insertAdjacentElement(position, dz);
+  }
+
+  async insertBlock(dropZone, html) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html.trim();
+    const newEl = wrapper.firstElementChild;
+    
+    if (newEl) {
+        newEl.classList.add('cms-editable', 'cms-modified');
+        dropZone.replaceWith(newEl);
+        
+        // Notify host (Basic broadcast for now, persistence requires better mapping)
+        this.broadcast();
+    }
+    this.toggleInsertMode(false);
+  }
+
   broadcast() {
     localStorage.setItem(this.storageKey, JSON.stringify(this.changes));
     localStorage.setItem(`${this.storageKey}-history`, JSON.stringify(this.historyStack));
+
     window.parent.postMessage({ 
       type: 'CMS_CHANGED', 
       changes: this.changes,

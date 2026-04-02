@@ -71,6 +71,17 @@ const server = http.createServer((req, res) => {
       res.setHeader(key, value);
     }
 
+    // GOBAL CORS PREFLIGHT: Handle OPTIONS for all Proxy/API routes
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200, {
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-git-protocol, x-access-token',
+            'Access-Control-Max-Age': '86400'
+        });
+        res.end();
+        return;
+    }
+
     // GitHub Login Redirect
     if (req.url.startsWith('/github/login')) {
       if (CLIENT_ID === 'YOUR_CLIENT_ID') {
@@ -229,16 +240,6 @@ const server = http.createServer((req, res) => {
 
     // Git Cors Proxy for isomorphic-git (Because public proxies strip Auth headers)
     if (req.url.startsWith('/git-proxy/')) {
-      if (req.method === 'OPTIONS') {
-        res.writeHead(200, {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-git-protocol'
-        });
-        res.end();
-        return;
-      }
-      
       const gitUrl = 'https://' + req.url.replace('/git-proxy/', '');
       const options = {
         method: req.method,
@@ -319,7 +320,7 @@ const server = http.createServer((req, res) => {
       } else {
         res.writeHead(200, { 
             'Content-Type': contentType,
-            'Permissions-Policy': 'interest-cohort=(), browsing-topics=()'
+            'Permissions-Policy': 'interest-cohort=()'
         });
         res.end(content, 'utf-8');
       }
