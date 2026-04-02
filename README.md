@@ -98,7 +98,7 @@ Please ensure your code follows the existing minimalist aesthetic and uses vanil
 ## ❤️ Sponsors
 
 ZeroCMS is an open-source project. If you find it useful, please consider supporting its development:
-- **GitHub Sponsors**: [Support our work](https://github.com/sponsors/megawron)
+- **GitHub Sponsors**: [Support our work](https://github.com/sponsors/0cms-dev)
 - **Open Collective**: [Join our community](https://opencollective.com/0cms)
 
 ## ⚠️ Important Note on WebContainers
