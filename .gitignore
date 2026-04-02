@@ -24,3 +24,12 @@ Thumbs.db
 
 # Testing
 /examples/
+
+# Rust / WASM
+**/target/
+**/pkg/
+**/*.rs.bk
+Cargo.lock
+/lib/zerocms_tagger_bg.wasm
+/lib/zerocms_tagger.js
+/tmp/

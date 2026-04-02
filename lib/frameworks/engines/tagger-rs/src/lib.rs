@@ -39,18 +39,32 @@ pub fn instrument_batch(input_json: &str) -> String {
             let mat = cap.get(0).unwrap();
             output.push_str(&file.content[last_pos..mat.start()]);
 
-            // Generate the Deterministic Breadcrumb (Unicode Marker)
-            // Format: \u{200B}\u{200C} + Index(Hex) + Line(Hex) + \u{200C}
-            let marker_id = format!("{:x}_{:x}", file.file_index, line_num);
-            let marker = format!("\u{200B}\u{200C}{}\u{200C}", marker_id);
+            // Deterministic Bit-based Breadcrumb Encoding
+            // START (\u{FEFF}) + FileID(bits) + SEP (\u{200D}) + Line(bits) + END (\u{FEFF})
+            let bin_file = format!("{:b}", file.file_index);
+            let bin_line = format!("{:b}", line_num);
+
+            let mut marker = String::from('\u{FEFF}');
+            
+            for bit in bin_file.chars() {
+                marker.push(if bit == '1' { '\u{200C}' } else { '\u{200B}' });
+            }
+            
+            marker.push('\u{200D}'); // SEP
+
+            for bit in bin_line.chars() {
+                marker.push(if bit == '1' { '\u{200C}' } else { '\u{200B}' });
+            }
+
+            marker.push('\u{FEFF}'); // END
             
             output.push_str(&marker);
             output.push_str(mat.as_str());
 
-            global_map.insert(marker_id, file.path.clone());
+            global_map.insert(format!("{}_{}", file.file_index, line_num), file.path.clone());
             
             // Track line numbers
-            line_num += mat.as_str().split('\n').count() - 1;
+            line_num += mat.as_str().split('\n').count() as u32 - 1;
             last_pos = mat.end();
         }
 
