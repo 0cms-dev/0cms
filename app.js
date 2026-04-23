@@ -103,6 +103,13 @@ const ui = isHostApp ? {
     terminalOverlay: document.getElementById('cmsTerminalOverlay')
 } : {};
 
+function escapeHTML(str) {
+    return String(str).replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+}
 
 if (isHostApp) {
 
@@ -1284,7 +1291,7 @@ async function fetchRepos(installationId = null) {
         
         if (!Array.isArray(currentRepos)) {
             const errorMsg = data.message || 'Failed to fetch repositories.';
-            ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">${errorMsg}</div>`;
+            ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">${escapeHTML(errorMsg)}</div>`;
             return;
         }
 
@@ -1301,7 +1308,7 @@ async function fetchRepos(installationId = null) {
         
     } catch (err) {
         console.error('FetchRepos Error:', err);
-        ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">Connection error: ${err.message}</div>`;
+        ui.landingRepoList.innerHTML = `<div style="grid-column: 1/-1; padding:40px; text-align:center; color:var(--text-danger)">Connection error: ${escapeHTML(err.message)}</div>`;
     }
 }
 
