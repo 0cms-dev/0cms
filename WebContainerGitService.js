@@ -193,16 +193,18 @@ export class WebContainerGitService {
   async wipeDir(dir) {
     try {
       const entries = await this.fs.readdir(dir);
-      for (const entry of entries) {
-        const path = `${dir}/${entry}`;
-        const stat = await this.fs.stat(path);
-        if (stat.isDirectory()) {
-          await this.wipeDir(path);
-          await this.fs.rmdir(path);
-        } else {
-          await this.fs.unlink(path);
-        }
-      }
+      await Promise.all(
+        entries.map(async (entry) => {
+          const path = `${dir}/${entry}`;
+          const stat = await this.fs.stat(path);
+          if (stat.isDirectory()) {
+            await this.wipeDir(path);
+            await this.fs.rmdir(path);
+          } else {
+            await this.fs.unlink(path);
+          }
+        })
+      );
     } catch (e) {
       // Base directory likely doesn't exist yet
     }
