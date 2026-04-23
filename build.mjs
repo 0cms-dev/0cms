@@ -21,7 +21,7 @@ async function build() {
     minify: true,
     sourcemap: "external",
     target: "browser",
-    external: ["/lib/*"], 
+    external: ["*"],
   });
 
   if (!result.success) {
@@ -31,12 +31,8 @@ async function build() {
 
   // 3. Copy Static Libraries
   console.log("📂 Copying libraries...");
-  const libs = await readdir("lib");
-  for (const lib of libs) {
-    const src = join("lib", lib);
-    const dest = join(DIST, "lib", lib);
-    await Bun.write(dest, Bun.file(src));
-  }
+  const { cp } = await import("node:fs/promises");
+  await cp("lib", join(DIST, "lib"), { recursive: true });
 
   // Extract the generated hashed file name from Bun's output
   const jsOutput = result.outputs.find(out => out.path.endsWith('.js'));
