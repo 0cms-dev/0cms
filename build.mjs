@@ -4,8 +4,37 @@ import { join } from "node:path";
 const DIST = "dist";
 const ASSETS = join(DIST, "assets");
 
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
+
 async function build() {
   console.log("🚀 Starting ZeroCMS Production Build (via Bun)...");
+
+  // 0. Ensure Tagger WASM is built
+  console.log("🦀 Checking for Super Tagger WASM...");
+  try {
+    await readdir("lib");
+    let hasWasm = false;
+    let hasJs = false;
+    try {
+      const dirContents = await readdir("lib");
+      hasWasm = dirContents.includes("zerocms_tagger_bg.wasm");
+      hasJs = dirContents.includes("zerocms_tagger.js");
+    } catch (e) {}
+
+    if (!hasWasm || !hasJs) {
+      console.log("⚠️ WASM files missing in lib/. Building them now...");
+      const buildOutput = await execAsync("bash scripts/build_tagger.sh");
+      console.log(buildOutput.stdout);
+    } else {
+      console.log("✅ WASM files found.");
+    }
+  } catch (error) {
+    console.error("❌ Failed to build WASM tagger:", error);
+    process.exit(1);
+  }
 
   // 1. Clean and Create Directories
   await rm(DIST, { recursive: true, force: true });
