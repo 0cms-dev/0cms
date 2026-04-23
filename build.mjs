@@ -31,11 +31,12 @@ async function build() {
 
   // 3. Copy Static Libraries
   console.log("📂 Copying libraries...");
+  const { cp } = await import("node:fs/promises");
   const libs = await readdir("lib");
   for (const lib of libs) {
     const src = join("lib", lib);
     const dest = join(DIST, "lib", lib);
-    await Bun.write(dest, Bun.file(src));
+    await cp(src, dest, { recursive: true });
   }
 
   // Extract the generated hashed file name from Bun's output

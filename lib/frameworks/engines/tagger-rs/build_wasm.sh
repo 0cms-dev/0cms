@@ -39,5 +39,6 @@ wasm-pack build --target web --release
 # 4. Copy to lib
 echo -e "${GREEN}📦 Copying binary to dashboard library...${NC}"
 cp pkg/zerocms_tagger_bg.wasm ../../../../lib/zerocms_tagger_bg.wasm
+cp pkg/zerocms_tagger.js ../../../../lib/zerocms_tagger.js
 
 echo -e "${GREEN}✨ Success! High-performance tagger is now active.${NC}"
