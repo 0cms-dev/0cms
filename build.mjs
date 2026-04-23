@@ -1,4 +1,4 @@
-import { rm, mkdir, readdir } from "node:fs/promises";
+import { rm, mkdir, readdir, stat, cp } from "node:fs/promises";
 import { join } from "node:path";
 
 const DIST = "dist";
@@ -35,7 +35,12 @@ async function build() {
   for (const lib of libs) {
     const src = join("lib", lib);
     const dest = join(DIST, "lib", lib);
-    await Bun.write(dest, Bun.file(src));
+    const stats = await stat(src);
+    if (stats.isDirectory()) {
+      await cp(src, dest, { recursive: true });
+    } else {
+      await Bun.write(dest, Bun.file(src));
+    }
   }
 
   // Extract the generated hashed file name from Bun's output
