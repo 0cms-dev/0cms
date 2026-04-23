@@ -38,14 +38,25 @@ async function build() {
     if (lib.isDirectory()) {
       await mkdir(dest, { recursive: true });
       // Very basic recursive copy for directories
-      const subLibs = await readdir(src, { recursive: true, withFileTypes: true });
-      for (const sub of subLibs) {
-        if (sub.isFile()) {
-           const subSrc = join(sub.parentPath, sub.name);
-           const subDest = join(DIST, sub.parentPath, sub.name);
-           await mkdir(join(DIST, sub.parentPath), { recursive: true });
-           await Bun.write(subDest, Bun.file(subSrc));
-        }
+      // Note: Node 18+ does not have recursive readdir natively unless node version >= 20.1
+      // If CI is on Node < 20, recursive: true on readdir will fail.
+      const getFiles = async (dir) => {
+        const dirents = await readdir(dir, { withFileTypes: true });
+        const files = await Promise.all(dirents.map((dirent) => {
+          const res = join(dir, dirent.name);
+          return dirent.isDirectory() ? getFiles(res) : res;
+        }));
+        return Array.prototype.concat(...files);
+      };
+
+      const allFiles = await getFiles(src);
+      for (const filePath of allFiles) {
+         // Create target dir based on relative path
+         const relativePath = filePath.substring("lib/".length);
+         const subDest = join(DIST, "lib", relativePath);
+         const parentDir = join(DIST, "lib", relativePath.substring(0, relativePath.lastIndexOf("/")));
+         await mkdir(parentDir, { recursive: true });
+         await Bun.write(subDest, Bun.file(filePath));
       }
     } else {
       await Bun.write(dest, Bun.file(src));
