@@ -292,16 +292,32 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    let filePath = '.' + req.url.split('?')[0];
+    const basePath = process.cwd();
+    let requestPath = req.url.split('?')[0];
+    try {
+      requestPath = decodeURIComponent(requestPath);
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('Bad Request');
+      return;
+    }
+
+    let filePath = path.join(basePath, requestPath);
+
+    // Security: Prevent path traversal
+    if (!filePath.startsWith(basePath) || (filePath !== basePath && !filePath.startsWith(basePath + path.sep))) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
 
     // Map root to the main index.html (One-Pager)
-    if (filePath === './') {
-      filePath = './index.html';
+    if (filePath === basePath || filePath === basePath + path.sep) {
+      filePath = path.join(basePath, 'index.html');
     }
-    
+
     // High-Performance Library Serving
     if (req.url.startsWith('/lib/')) {
-      filePath = '.' + req.url;
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     }
 
