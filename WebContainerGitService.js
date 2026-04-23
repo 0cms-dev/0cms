@@ -243,8 +243,9 @@ export class WebContainerGitService {
     const tree = {};
     const entries = await this.fs.readdir(dir);
     
-    for (const entry of entries) {
-      if (entry === '.git' || entry === 'node_modules') continue;
+    await Promise.all(entries.map(async (entry) => {
+      if (entry === '.git' || entry === 'node_modules') return;
+
       const path = `${dir}/${entry}`;
       const stat = await this.fs.stat(path);
       
@@ -258,7 +259,8 @@ export class WebContainerGitService {
           file: { contents }
         };
       }
-    }
+    }));
+
     return tree;
   }
 
