@@ -7,12 +7,21 @@ const ASSETS = join(DIST, "assets");
 async function build() {
   console.log("🚀 Starting ZeroCMS Production Build (via Bun)...");
 
-  // 1. Clean and Create Directories
+  // 1. Compile WASM First
+  console.log("🦀 Compiling Rust WASM module...");
+  const proc = Bun.spawn(["bash", "scripts/build_tagger.sh"]);
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    console.error("❌ Failed to compile WASM module");
+    process.exit(1);
+  }
+
+  // 2. Clean and Create Directories
   await rm(DIST, { recursive: true, force: true });
   await mkdir(ASSETS, { recursive: true });
   await mkdir(join(DIST, "lib"), { recursive: true });
 
-  // 2. Bundle Dashboard App
+  // 3. Bundle Dashboard App
   console.log("📦 Bundling app... ");
   const result = await Bun.build({
     entrypoints: ["app.js"],
