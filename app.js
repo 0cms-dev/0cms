@@ -1169,10 +1169,17 @@ async function fetchInstallations() {
             installations.forEach(inst => {
                 const item = document.createElement('div');
                 item.className = 'dropdown-item';
-                item.innerHTML = `
-                    <img src="${inst.account.avatar_url}" class="account-avatar">
-                    <span>${inst.account.login}</span>
-                `;
+
+                const img = document.createElement('img');
+                img.src = inst.account.avatar_url;
+                img.className = 'account-avatar';
+
+                const span = document.createElement('span');
+                span.textContent = inst.account.login;
+
+                item.appendChild(img);
+                item.appendChild(span);
+
                 item.onclick = (e) => {
                     e.stopPropagation();
                     ui.accountDropdown.classList.remove('open');
