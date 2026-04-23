@@ -334,16 +334,22 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`\x1b[32m[ZeroCMS] Server running at http://localhost:${PORT}\x1b[0m`);
-  console.log(`\x1b[33mOpen http://localhost:${PORT} to start the CMS.\x1b[0m`);
-  if (CLIENT_ID === 'YOUR_CLIENT_ID') {
-    console.log(`\x1b[31m[!] GITHUB_CLIENT_ID is not configured. OAuth will not work.\x1b[0m`);
-  }
-  if (!APP_ID) {
-    console.log(`\x1b[33m[!] GITHUB_APP_ID not found. Organization support disabled.\x1b[0m`);
-  }
-  if (!PRIVATE_KEY) {
-    console.log(`\x1b[33m[!] GITHUB_PRIVATE_KEY not found. Organization support disabled.\x1b[0m`);
-  }
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`\x1b[32m[ZeroCMS] Server running at http://localhost:${PORT}\x1b[0m`);
+    console.log(`\x1b[33mOpen http://localhost:${PORT} to start the CMS.\x1b[0m`);
+    if (CLIENT_ID === 'YOUR_CLIENT_ID') {
+      console.log(`\x1b[31m[!] GITHUB_CLIENT_ID is not configured. OAuth will not work.\x1b[0m`);
+    }
+    if (!APP_ID) {
+      console.log(`\x1b[33m[!] GITHUB_APP_ID not found. Organization support disabled.\x1b[0m`);
+    }
+    if (!PRIVATE_KEY) {
+      console.log(`\x1b[33m[!] GITHUB_PRIVATE_KEY not found. Organization support disabled.\x1b[0m`);
+    }
+  });
+}
+
+if (typeof module !== 'undefined') {
+  module.exports.base64Url = base64Url;
+}
