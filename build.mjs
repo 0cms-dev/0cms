@@ -31,11 +31,25 @@ async function build() {
 
   // 3. Copy Static Libraries
   console.log("📂 Copying libraries...");
-  const libs = await readdir("lib");
+  const libs = await readdir("lib", { withFileTypes: true });
   for (const lib of libs) {
-    const src = join("lib", lib);
-    const dest = join(DIST, "lib", lib);
-    await Bun.write(dest, Bun.file(src));
+    const src = join("lib", lib.name);
+    const dest = join(DIST, "lib", lib.name);
+    if (lib.isDirectory()) {
+      await mkdir(dest, { recursive: true });
+      // Very basic recursive copy for directories
+      const subLibs = await readdir(src, { recursive: true, withFileTypes: true });
+      for (const sub of subLibs) {
+        if (sub.isFile()) {
+           const subSrc = join(sub.parentPath, sub.name);
+           const subDest = join(DIST, sub.parentPath, sub.name);
+           await mkdir(join(DIST, sub.parentPath), { recursive: true });
+           await Bun.write(subDest, Bun.file(subSrc));
+        }
+      }
+    } else {
+      await Bun.write(dest, Bun.file(src));
+    }
   }
 
   // Extract the generated hashed file name from Bun's output
