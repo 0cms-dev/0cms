@@ -4,7 +4,7 @@ import { IframeSyncService } from './lib/services/IframeSyncService.js';
 import cms from './cms.js'; // The visual editor bridge
 
 // Robust detection to ensure we don't suppress the UI in LocalCorp/Proxy environments
-const isHostApp = window.self === window.top || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const isHostApp = window.self === window.top;
 
 // --- RUNTIME: Register Service Worker for WASM Previews ---
 if ('serviceWorker' in navigator && isHostApp) {
@@ -645,6 +645,47 @@ safeBind(ui.btnClose, 'onclick', async () => {
     }, 500);
 });
 
+/**
+ * HARD RESET: Wipes all local state, caches, and reloads the page.
+ * Use when the CMS is in a broken state.
+ */
+window.hardReset = async () => {
+    if (!confirm('Hard Reset will clear all cached data and restart the CMS. Continue?')) return;
+    
+    // 1. Kill running processes
+    if (cmsService) {
+        try { await cmsService.shutdown(); } catch(e) {}
+    }
+
+    // 2. Clear all localStorage keys related to ZCMS
+    Object.keys(localStorage).filter(k => k.startsWith('zcms')).forEach(k => localStorage.removeItem(k));
+    
+    // 3. Clear all browser caches
+    if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map(n => caches.delete(n)));
+    }
+    
+    // 4. Unregister service workers
+    if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+    }
+    
+    // 5. Delete all IndexedDB databases (lightning-fs stores data here)
+    try {
+        const dbs = await indexedDB.databases();
+        await Promise.all(dbs.map(db => new Promise((res, rej) => {
+            const req = indexedDB.deleteDatabase(db.name);
+            req.onsuccess = res; req.onerror = rej;
+        })));
+    } catch(e) {}
+
+    // 6. Hard reload
+    window.location.href = window.location.origin + '/?reset=1';
+};
+
+
 safeBind(ui.loginBtn, 'onclick', () => window.location.href = '/github/login');
 safeBind(ui.landingLoginBtn, 'onclick', () => window.location.href = '/github/login');
 
@@ -967,12 +1008,13 @@ async function startCmsEngine(repo, token, demo = false) {
         
         // ONLY update HUD label if we are NOT booting or if it's the final ready state
         if (status === 'Server Ready!') {
-            if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
+            if (ui.statusLabel) ui.statusLabel.textContent = '0 unsaved changes';
             document.documentElement.classList.remove('booting');
             // SYNC LIBRARY ON BOOT
             scanProjectComponents();
         } else {
-            if (ui.statusLabel) ui.statusLabel.textContent = 'Preparing...';
+            const driverName = (cmsService && cmsService.activeDriver) ? cmsService.activeDriver.name : '0cms';
+            if (ui.statusLabel) ui.statusLabel.textContent = `${driverName}: ${status}`;
             document.documentElement.classList.add('booting');
         }
         
@@ -1021,9 +1063,10 @@ async function startCmsEngine(repo, token, demo = false) {
         });
     };
 
-    // If already pre-warmed, ensure UI shows the URL immediately
-    if (cmsService.serverUrl) {
-        ui.preview.src = cmsService.serverUrl;
+    // If already pre-warmed and previewUrl is ready, show it immediately.
+    // If only serverUrl is set but previewUrl isn't yet, wait for onServerReady callback.
+    if (cmsService.previewUrl) {
+        ui.preview.src = cmsService.previewUrl;
         if (ui.statusLabel) ui.statusLabel.textContent = '0 unchanged changes';
         
         // ACTIVATE RUNTIME BRIDGE: Ensure PHP/Python/Rust preview is ready
@@ -1048,13 +1091,18 @@ async function startCmsEngine(repo, token, demo = false) {
         cmsService.repoUrl = `https://github.com/${repo}`;
         cmsService.token = token;
         
-        // Start a watchdog timer to help users if it hangs
+        // Start a watchdog timer to help users if it hangs (30s target)
         const bootWatchdog = setTimeout(() => {
             if (!cmsService.serverUrl) {
-                ui.loaderStatus.textContent = "Booting is taking longer than expected... Try refreshing if it hangs.";
-                showToast("Initialization slow. Please wait or reload.", "info");
+                const msg = "Initialization is taking longer than usual (>30s). This usually happens during the first cold boot.";
+                ui.loaderStatus.textContent = msg;
+                ui.loaderStatus.style.color = "var(--primary)";
+                showToast(`Still working... <a href="#" onclick="toggleTerminal(); return false;" style="color:white; text-decoration:underline;">View Logs</a>`, "info");
+                
+                // Track this as a slow boot
+                console.warn(`[Watchdog] Boot exceeded 30s for ${repo}`);
             }
-        }, 25000);
+        }, 30000);
 
         try {
             await cmsService.boot(cmsService.repoUrl, localStorage.getItem('zcms-manual-command'));
@@ -1066,14 +1114,15 @@ async function startCmsEngine(repo, token, demo = false) {
         } catch (e) {
             console.error('[CMS Service] Boot failed:', e);
             ui.loaderStatus.textContent = `Boot Failed: ${e.message}`;
+            ui.loaderStatus.style.color = "var(--text-danger)";
             showToast(`Boot Failed. <a href="#" onclick="toggleTerminal(); return false;" style="color:white; text-decoration:underline; margin-left:8px;">Show Logs</a>`, 'error');
             document.documentElement.classList.remove('booting');
         } finally {
             clearTimeout(bootWatchdog);
         }
-    } else if (cmsService.serverUrl) {
-        ui.preview.src = cmsService.serverUrl;
-        ui.siteUrl.textContent = 'Live Preview Active';
+    } else if (cmsService.previewUrl) {
+        ui.preview.src = cmsService.previewUrl;
+        if (ui.statusLabel) ui.statusLabel.textContent = 'Live Preview Active';
 
         // ACTIVATE RUNTIME BRIDGE
         if (cmsService.activeDriver) {
@@ -1360,6 +1409,10 @@ function selectRepo(name) {
 
     settings.repo = name;
     localStorage.setItem('zcms-settings', JSON.stringify(settings));
+    
+    // Explicitly open the dashboard UI first for immediate feedback
+    window.openDashboard();
+    
     ui.stepPicker.classList.add('hidden');
     
     // Clear State for the new project
@@ -1383,9 +1436,6 @@ function selectRepo(name) {
     document.documentElement.classList.remove('demo-mode-child');
     
     refreshLandingUI();
-    
-    // Explicitly open the dashboard UI first for immediate feedback
-    window.openDashboard();
     
     // Start the engine
     startCmsEngine(name, getActiveToken());
@@ -1438,6 +1488,34 @@ safeBind(ui.navBack, 'onclick', () => {
 safeBind(ui.navForward, 'onclick', () => {
     ui.preview.contentWindow.postMessage({ type: 'CMS_REDO' }, '*');
 });
+
+// Viewport Switching
+const setViewMode = (mode) => {
+    ui.preview.className = mode === 'desktop' ? '' : `view-${mode}`;
+    ui.viewDesktop.classList.toggle('active', mode === 'desktop');
+    ui.viewTablet.classList.toggle('active', mode === 'tablet');
+    ui.viewMobile.classList.toggle('active', mode === 'mobile');
+};
+
+safeBind(ui.viewDesktop, 'onclick', () => setViewMode('desktop'));
+safeBind(ui.viewTablet, 'onclick', () => setViewMode('tablet'));
+safeBind(ui.viewMobile, 'onclick', () => setViewMode('mobile'));
+
+// Additional Navigation
+safeBind(ui.navSEO, 'onclick', () => {
+    const isVisible = ui.pageSettingsPanel.style.display === 'flex';
+    ui.pageSettingsPanel.style.display = isVisible ? 'none' : 'flex';
+    if (!isVisible) {
+        // Request fresh SEO data from bridge
+        ui.preview.contentWindow.postMessage({ type: 'CMS_SEO_REQUEST' }, '*');
+    }
+});
+
+safeBind(ui.navNewPage, 'onclick', () => {
+    const isVisible = ui.createPanel.style.display === 'flex';
+    ui.createPanel.style.display = isVisible ? 'none' : 'flex';
+});
+
 
 
 // Initial state

@@ -22,7 +22,8 @@ export class WebContainerGitService {
     this.config = config;
     this.fs = new FS('cms-fs').promises;
     this.webcontainerInstance = null;
-    this.serverUrl = null;
+    this.serverUrl = null;       // Raw WebContainer URL (port 3001)
+    this.previewUrl = null;      // Full URL including base path (used for iframe)
     
     // Callbacks for UI updates
     this.onStatusChange = config.onStatusChange || (() => {});
@@ -39,6 +40,7 @@ export class WebContainerGitService {
     // Track files actually modified by applySmartMatchChange so we know what to sync
     this._modifiedFiles = new Set();
     this._syncTimer = null;
+    this._fsBusy = false; // Mutex: prevents concurrent WASM FS operations
 
     // Framework detection and drivers
     this.broker = null;
@@ -49,6 +51,7 @@ export class WebContainerGitService {
       /ready\s-\sstarted\sserver/i,      // Next.js
       /compiled\ssuccessfully/i,         // Webpack / Nuxt
       /dev\sserver\srunning\sat/i,       // Vite / Astro
+      /astro\s.*ready\sin/i,             // Astro specific
       /serving\sat/i,                    // Eleventy
       /server\srunning\son/i,            // Hugo / Zola
       /listening\son/i                   // Generic
@@ -72,6 +75,7 @@ export class WebContainerGitService {
     }
     
     this.serverUrl = null;
+    this.previewUrl = null;
     this.middlewareStarted = false;
     this.repoUrl = null;
     this.semanticReady = false;
@@ -127,7 +131,7 @@ export class WebContainerGitService {
       await this.syncToWebContainer();
       
       this.onStatusChange('Preparing Environment...');
-      await this.loadSnapshot(); // Restore node_modules snapshot if available
+      await this.loadSnapshot(); 
       await this.installDependencies();
       
       // 4. AUTO-DETECT FRAMEWORK
@@ -140,8 +144,8 @@ export class WebContainerGitService {
       this.onStatusChange('Starting Dev Server...');
       await this.startDevServer(manualCommand);
       
-      // Schedule background cache sync
-      setTimeout(() => this.syncBuildCache(), 5000); 
+      // Schedule background cache sync — delayed 90s to avoid race with Astro warmup
+      setTimeout(() => this.syncBuildCache(), 90000); 
       
     } catch (error) {
       console.error('[CMS Service] Boot failed:', error);
@@ -239,13 +243,19 @@ export class WebContainerGitService {
   /**
    * Generates a FileSystemTree from LightningFS to be used with WebContainer.mount()
    */
+  /**
+   * Generates a FileSystemTree from LightningFS to be used with WebContainer.mount()
+   * Optimized: Parallel reading and exclusion of heavy build artifacts.
+   */
   async generateFileSystemTree(dir) {
     const tree = {};
     const entries = await this.fs.readdir(dir);
-    
-    for (const entry of entries) {
-      if (entry === '.git' || entry === 'node_modules') continue;
-      const path = `${dir}/${entry}`;
+    const ignoreList = ['.git', 'node_modules', 'dist', 'build', '.next', '.astro', '.svelte-kit', 'out', '.cache'];
+
+    await Promise.all(entries.map(async (entry) => {
+      if (ignoreList.includes(entry)) return;
+      
+      const path = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
       const stat = await this.fs.stat(path);
       
       if (stat.isDirectory()) {
@@ -258,7 +268,8 @@ export class WebContainerGitService {
           file: { contents }
         };
       }
-    }
+    }));
+    
     return tree;
   }
 
@@ -282,27 +293,64 @@ export class WebContainerGitService {
   /**
    * Idempotent Middleware Startup: Ensures the bridge is running for the correct target port.
    */
-  async ensureMiddleware(targetPort) {
+  async startMiddleware(targetPort = null, basePath = '') {
+    const port = targetPort || this.activeDriver?.server.port || 3000;
+    targetPort = port; // Ensure we use the resolved port
     // 0. CONCURRENCY LOCK: Prevent parallel orchestrations
     if (this._isOrchestratingMiddleware) return;
     
-    // If already started for the exact same port, do nothing
-    if (this.middlewareStarted && this._lastMiddlewarePort === targetPort) {
+    // If already started for the exact same port AND base path, do nothing
+    if (this.middlewareStarted && this._lastMiddlewarePort === targetPort && this._lastMiddlewareBasePath === basePath) {
         return;
     }
 
     this._isOrchestratingMiddleware = true;
     try {
-        this.onLog(`[Middleware] Target updated to port ${targetPort}. Orchestrating bridge...`);
+        this.onLog(`[Middleware] Target updated to port ${targetPort} (Base: ${basePath}). Orchestrating bridge...`);
         this._lastMiddlewarePort = targetPort;
+        this._lastMiddlewareBasePath = basePath;
 
     // 1. Create the middleware proxy script
-    const middlewareContent = this.activeDriver?.server.getMiddlewareScript(targetPort) || `
+    const middlewareContent = this.activeDriver?.server.getMiddlewareScript?.(targetPort) || `
       const http = require('http');
+      const targetPort = parseInt(process.env.TARGET_PORT);
+      const basePath = process.env.BASE_PATH || '';
+      
       const server = http.createServer((req, res) => {
-        res.writeHead(502); res.end('No framework driver active.');
+        console.log('[Middleware] Request: ' + req.url);
+        
+        // AUTO-REDIRECT: If root is requested but a base path exists, redirect
+        if (req.url === '/' && basePath && basePath !== '/') {
+          console.log('[Middleware] Redirecting / to ' + basePath);
+          res.writeHead(302, { 'Location': basePath });
+          res.end();
+          return;
+        }
+
+        const options = {
+          hostname: '127.0.0.1',
+          port: targetPort,
+          path: req.url,
+          method: req.method,
+          headers: req.headers
+        };
+
+        const proxyReq = http.request(options, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res, { end: true });
+        });
+
+        proxyReq.on('error', (e) => {
+          res.writeHead(502);
+          res.end('Gateway Error: ' + e.message);
+        });
+
+        req.pipe(proxyReq, { end: true });
       });
-      server.listen(3001, '0.0.0.0');
+      
+      server.listen(3001, '0.0.0.0', () => {
+        console.log('[ServerTrait] Middleware Bridge running on port 3001 -> ' + targetPort + ' (Base: ' + basePath + ')');
+      });
     `;
     
     const bridgeResponse = await fetch('/cms.js');
@@ -330,7 +378,10 @@ export class WebContainerGitService {
     while (retryCount < 3) {
         try {
             this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
-                env: { TARGET_PORT: targetPort }
+                env: { 
+                    TARGET_PORT: targetPort.toString(),
+                    BASE_PATH: basePath || this.activeDriver?.routing?.base || ''
+                }
             });
             this.middlewareProc.output.pipeTo(new WritableStream({
                 write: (data) => {
@@ -355,9 +406,68 @@ export class WebContainerGitService {
     }
   }
 
-  async startMiddleware(targetPort = null) {
-      const port = targetPort || this.activeDriver?.server.port || 3000;
-      return this.ensureMiddleware(port);
+  /**
+   * Fast middleware restart: Updates BASE_PATH without kill-port delays.
+   * Called when we detect the framework base path from server logs.
+   */
+  async _fastRestartMiddleware(targetPort, basePath) {
+    if (!this.webcontainerInstance) return;
+    // Debounce: only restart once per unique base path
+    if (this._lastMiddlewareBasePath === basePath) return;
+    this._lastMiddlewareBasePath = basePath;
+
+    this.onLog(`[Middleware] Fast-updating proxy for base: ${basePath}`);
+    
+    const middlewareContent = `
+      const http = require('http');
+      const targetPort = parseInt(process.env.TARGET_PORT);
+      const basePath = process.env.BASE_PATH || '';
+      
+      const server = http.createServer((req, res) => {
+        console.log('[Middleware] Request: ' + req.url);
+        if (req.url === '/' && basePath && basePath !== '/') {
+          console.log('[Middleware] Redirecting / to ' + basePath);
+          res.writeHead(302, { 'Location': basePath });
+          res.end();
+          return;
+        }
+        const options = {
+          hostname: '127.0.0.1', port: targetPort,
+          path: req.url, method: req.method, headers: req.headers
+        };
+        const proxyReq = http.request(options, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res, { end: true });
+        });
+        proxyReq.on('error', (e) => { res.writeHead(502); res.end('Gateway Error: ' + e.message); });
+        req.pipe(proxyReq, { end: true });
+      });
+      server.listen(3001, '0.0.0.0', () => {
+        console.log('[ServerTrait] Middleware Bridge running on port 3001 -> ' + targetPort + ' (Base: ' + basePath + ')');
+      });
+    `;
+
+    try {
+      // Kill old process
+      if (this.middlewareProc) {
+        try { this.middlewareProc.kill(); } catch(e) {}
+        this.middlewareProc = null;
+      }
+      // Brief pause for OS to release port
+      await new Promise(r => setTimeout(r, 600));
+      
+      await this.webcontainerInstance.fs.writeFile('zcms-middleware.js', middlewareContent);
+      
+      this.middlewareProc = await this.webcontainerInstance.spawn('node', ['zcms-middleware.js'], {
+        env: { TARGET_PORT: targetPort.toString(), BASE_PATH: basePath }
+      });
+      this.middlewareProc.output.pipeTo(new WritableStream({
+        write: (data) => this.onLog(`[bridge] ${data}`)
+      }));
+      this.onLog(`[Middleware] Proxy updated successfully with base path: ${basePath}`);
+    } catch(e) {
+      this.onLog(`[Warning] Fast middleware restart failed: ${e.message}`);
+    }
   }
 
   /**
@@ -379,22 +489,49 @@ export class WebContainerGitService {
           this.onLog(`[Instrumentation] Injecting invisible Unicode breadcrumbs (Batch: ${this.tagger.activeEngine.constructor.name})...`);
           
           const contentFiles = [];
-          if (this.activeDriver.routing && this.activeDriver.routing.contentPaths) {
-              for (const dir of this.activeDriver.routing.contentPaths) {
-                  // FIX: Normalize absolute path within WebContainer
-                  let fullDir = dir.startsWith('/') ? dir : '/repo/' + dir;
-                  fullDir = fullDir.replace(/\/+/g, '/');
-                  
-                  try {
-                      const files = await this.tagger.recursiveReaddir(fullDir);
-                      contentFiles.push(...files.filter(f => 
-                          f.endsWith('.md') || f.endsWith('.mdx') || 
-                          f.endsWith('.json') || f.endsWith('.yaml') || f.endsWith('.yml') ||
-                          f.endsWith('.js') || f.endsWith('.jsx') || f.endsWith('.ts') || f.endsWith('.tsx')
-                      ));
-                  } catch (e) {
-                      // Silent skip for expected framework variations
+          
+          // ROBUSTNESS: If no content paths are defined, perform a GLOBAL RECURSIVE SCAN
+          const targetPaths = (this.activeDriver.routing && this.activeDriver.routing.contentPaths && this.activeDriver.routing.contentPaths.length > 0)
+              ? this.activeDriver.routing.contentPaths
+              : ['/repo']; // Fallback to root for universal support
+
+          this.onLog(`[Instrumentation] Scanning ${targetPaths.length} paths for content...`);
+          
+          for (const dir of targetPaths) {
+              // Ensure we are looking inside /repo
+              let fullDir = dir;
+              if (!fullDir.startsWith('/repo')) {
+                  fullDir = '/repo/' + (fullDir.startsWith('/') ? fullDir.slice(1) : fullDir);
+              }
+              fullDir = fullDir.replace(/\/+/g, '/');
+              if (fullDir.endsWith('/')) fullDir = fullDir.slice(0, -1);
+              
+                try {
+                  // RESILIENCE CHECK: Use readdir to check if path exists (since stat() is not supported)
+                  const parts = fullDir.split('/').filter(Boolean);
+                  const parent = '/' + parts.slice(0, -1).join('/');
+                  const target = parts[parts.length - 1];
+                  const exists = await this.webcontainerInstance.fs.readdir(parent)
+                      .then(files => files.includes(target))
+                      .catch(() => false);
+
+                  if (!exists) {
+                      this.onLog(`[Warning] Path skipped (Not Found): ${fullDir}`);
+                      continue;
                   }
+
+                  const files = await this.tagger.recursiveReaddir(fullDir);
+                  const validExts = this.activeDriver.routing?.extensions || ['.md', '.mdx', '.html', '.json', '.yaml', '.yml', '.js', '.jsx', '.ts', '.tsx'];
+                  
+                  contentFiles.push(...files.filter(f => 
+                      validExts.some(ext => f.endsWith(ext)) &&
+                      !f.includes('/node_modules/') && 
+                      !f.includes('/.git/') &&
+                      !f.includes('/dist/') &&
+                      !f.includes('/build/')
+                  ));
+              } catch (e) {
+                  this.onLog(`[Warning] Scan failed for ${fullDir}: ${e.message}`);
               }
           }
 
@@ -413,27 +550,37 @@ export class WebContainerGitService {
   }
 
   async readDirRecursive(dir) {
+    const ignoreList = ['.git', 'node_modules', 'dist', 'build', '.next', '.astro', '.svelte-kit'];
     const results = [];
     const entries = await this.fs.readdir(dir);
     
-    for (const entry of entries) {
-      if (entry === '.git') continue;
-      const path = `${dir}/${entry}`;
+    await Promise.all(entries.map(async (entry) => {
+      if (ignoreList.includes(entry)) return;
+      
+      const path = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
       const stat = await this.fs.stat(path);
       
       if (stat.isDirectory()) {
         results.push({ path, type: 'dir' });
-        results.push(...(await this.readDirRecursive(path)));
+        const subResults = await this.readDirRecursive(path);
+        results.push(...subResults);
       } else {
         results.push({ path, type: 'file' });
       }
-    }
+    }));
+    
     return results;
   }
 
   async installDependencies() {
-    // PRO-TIP: Check if node_modules already exists from a previous sync
-    // This makes repeat-boots extremely fast.
+    // 1. Check if package.json exists
+    const hasPackageJson = await this.webcontainerInstance.fs.readFile('/repo/package.json').then(() => true).catch(() => false);
+    if (!hasPackageJson) {
+      this.onLog('[npm] No package.json found. Skipping dependency installation.');
+      return;
+    }
+
+    // 2. Reuse existing node_modules if present
     const hasModules = await this.webcontainerInstance.fs.readdir('/repo/node_modules').then(e => e.length > 0).catch(() => false);
     if (hasModules) {
       this.onLog('Reuse existing node_modules detected.');
@@ -441,7 +588,8 @@ export class WebContainerGitService {
     }
     
     this.onStatusChange('Installing Dependencies...');
-    const installProcess = await this.webcontainerInstance.spawn('npm', ['install'], {
+    this.onLog('[npm] Running optimized install...');
+    const installProcess = await this.webcontainerInstance.spawn('npm', ['install', '--no-audit', '--no-fund', '--quiet'], {
         cwd: 'repo'
     });
     
@@ -449,31 +597,61 @@ export class WebContainerGitService {
     installProcess.output.pipeTo(new WritableStream({
       write: (data) => {
           lastOutput = data;
-          this.onLog(`[npm] ${data}`);
           if (this.isDevMode) console.log('[npm install]', data);
       }
     }));
 
     const exitCode = await installProcess.exit;
     if (exitCode !== 0) {
-        this.onLog(`[Error] npm install failed (Exit: ${exitCode}): ${lastOutput}`);
-        throw new Error('npm install failed');
+        this.onLog(`[Error] npm install failed (Exit: ${exitCode}). Retrying with full log...`);
+        // Fallback for debugging if it fails
+        const retryProc = await this.webcontainerInstance.spawn('npm', ['install'], { cwd: 'repo' });
+        retryProc.output.pipeTo(new WritableStream({ write: d => this.onLog(`[npm-retry] ${d}`) }));
+        if (await retryProc.exit !== 0) throw new Error('npm install failed');
     }
+    this.onLog('[npm] Dependencies synchronized.');
   }
 
+  /**
+   * Verified Binary Resolution: Checks if a binary exists and is valid.
+   * If broken or missing, falls back to npx.
+   */
   async resolveBin(cmd, pkgName) {
     const parentDir = `/repo/node_modules/.bin`;
-    // WebContainer FS does not have stat(), so we check by reading the directory
-    const exists = await this.webcontainerInstance.fs.readdir(parentDir)
+    
+    // 1. Check if the .bin directory exists at all
+    const binExists = await this.webcontainerInstance.fs.readdir('/repo/node_modules')
+        .then(files => files.includes('.bin'))
+        .catch(() => false);
+
+    if (!binExists) {
+        this.onLog(`[Resolver] No .bin directory found. Falling back to npx for ${cmd}`);
+        return `npx --yes ${pkgName}`;
+    }
+
+    // 2. Check if the specific command exists in .bin
+    const cmdExists = await this.webcontainerInstance.fs.readdir(parentDir)
         .then(files => files.includes(cmd))
         .catch(() => false);
 
-    if (exists) {
+    if (cmdExists) {
         const localPath = `${parentDir}/${cmd}`;
-        this.onLog(`[Smart-Resolution] Found local binary: ${cmd}`);
-        return localPath;
+        
+        // 3. STABILITY CHECK: Try to 'stat' or read a bit to ensure it's not a dead symlink
+        // WebContainer fs.readFile is the most reliable check for existence/readability
+        const isReadable = await this.webcontainerInstance.fs.readFile(localPath)
+            .then(() => true)
+            .catch(() => false);
+
+        if (isReadable) {
+            this.onLog(`[Resolver] Verified local binary: ${cmd}`);
+            return localPath;
+        } else {
+            this.onLog(`[Resolver] Local binary ${cmd} is unreadable/broken. Falling back to npx.`);
+            return `npx --yes ${pkgName}`;
+        }
     } else {
-        this.onLog(`[Smart-Resolution] Local ${cmd} missing. Using silent fallback: npx --yes ${pkgName}`);
+        this.onLog(`[Resolver] Local ${cmd} missing in .bin. Using fallback: npx --yes ${pkgName}`);
         return `npx --yes ${pkgName}`;
     }
   }
@@ -481,33 +659,57 @@ export class WebContainerGitService {
   async startDevServer(manualCommand = null) {
     let devCommand = manualCommand;
     
-    // Auto-detection logic if no manual command provided
+    // 1. RESOLVE THE COMMAND SEMANTICALLY
+    this.onLog(`[Resolver] Aligning command for ${this.activeDriver?.name || 'Generic'} project...`);
+    
+    // PRIORITY 1: package.json logic
+    const pkgRaw = await this.webcontainerInstance.fs.readFile('/repo/package.json', 'utf8').catch(() => null);
+    if (pkgRaw) {
+        try {
+            const pkg = JSON.parse(pkgRaw);
+            const scripts = pkg.scripts || {};
+            
+            // If we have a 'dev' or 'start' script, use it. This is the absolute Node standard.
+            if (scripts.dev) {
+                devCommand = 'npm run dev';
+            } else if (scripts.start) {
+                devCommand = 'npm run start';
+            }
+        } catch (e) {}
+    }
+
+    // PRIORITY 2: If no npm script, or if we have a semantic driver command, resolve it intelligently
     if (!devCommand) {
-      try {
-        const pkgRaw = await this.webcontainerInstance.fs.readFile('/repo/package.json', 'utf8').catch(() => null);
-        if (pkgRaw) {
-          const pkg = JSON.parse(pkgRaw);
-          const scripts = pkg.scripts || {};
-          // 1. Check for standard scripts
-          if (scripts.dev) devCommand = 'npm run dev';
-          else if (scripts.serve) devCommand = 'npm run serve';
-          else if (scripts.start) devCommand = 'npm run start';
-          else if (scripts.server) devCommand = 'npm run server';
+        const semanticCmd = manualCommand || this.activeDriver?.server?.command || 'npm run dev';
+        
+        if (semanticCmd.includes('npm run') || semanticCmd.includes('npx')) {
+            devCommand = semanticCmd;
+        } else {
+            // Fallback: try to find local bin or use npx
+            const binName = semanticCmd.split(' ')[0];
+            const localBin = await this.resolveBin(binName, binName);
+            devCommand = localBin + ' ' + semanticCmd.split(' ').slice(1).join(' ');
         }
-      } catch (e) {
-        this.onLog(`[Warning] Error deciding dev command: ${e.message}`);
-      }
     }
-    
+
     // FINAL ENFORCEMENT: For Next.js projects in WebContainers, Webpack is the only stable path.
-    if (this.activeDriver?.id === 'nextjs') {
+    if (this.activeDriver?.id === 'nextjs' && !devCommand.includes('--webpack')) {
        this.onLog('[Optimization] Enforced Webpack for Next.js (WebContainer compatibility).');
-       const nextBin = await this.resolveBin('next', 'next');
-       devCommand = `${nextBin} dev --webpack`;
+       devCommand += ' --webpack';
     }
-    
-    // Default fallback
-    if (!devCommand) devCommand = 'npm run dev';
+
+    // SHADOW PACKAGE.JSON INJECTION: Satisfy npx/npm for non-Node projects
+    const pkgExists = (pkgRaw !== null);
+    if (!pkgExists && (devCommand.includes('npx') || (this.activeDriver && this.activeDriver.id !== 'generic-node'))) {
+        this.onLog('[Compatibility] Injecting Shadow package.json to satisfy runtime environment...');
+        const shadowPkg = {
+            name: "zerocms-runtime-shadow",
+            version: "1.0.0",
+            private: true,
+            description: "Temporary shadow package to satisfy strict npm/npx environment constraints."
+        };
+        await this.webcontainerInstance.fs.writeFile('/repo/package.json', JSON.stringify(shadowPkg, null, 2));
+    }
 
     // Cleanup previous processes if any
     if (this.serverProcess) {
@@ -516,35 +718,27 @@ export class WebContainerGitService {
        this.serverProcess = null;
     }
     await new Promise(r => setTimeout(r, 400));
-
+    
     // 1. Listen for the server-ready event of WebContainers
     if (!this._serverReadyListenerAttached) {
         this.webcontainerInstance.on('server-ready', async (port, url) => {
           if (port === 3001) {
             this.serverUrl = url;
-            // STABILITY DELAY: 3.5s buffer for cold boots
+            this.onLog('[Bridge] Port 3001 ready. Initializing preview instantly...');
+            
+            this.previewUrl = this._detectedBasePath 
+                ? this.serverUrl.replace(/\/$/, '') + this._detectedBasePath
+                : this.serverUrl;
+                
+            // Delay iframe load slightly to allow WebContainer Ingress router to register the port
+            // Otherwise the iframe immediately hits a 404 Not Found from the WebContainer edge.
             setTimeout(() => {
-              this.onServerReady(url);
-              this.onStatusChange('Server Ready!');
-            }, 3500);
-          }
-          
-          // a. If it's the first port (not our middleware), ensure the middleware is running for IT
-          if (port !== 3001) {
-            this.ensureMiddleware(port);
+                this.onServerReady(this.previewUrl);
+            }, 1500);
+            this.onStatusChange('Warming Up...');
           }
         });
         this._serverReadyListenerAttached = true;
-    }
-
-    // SMART AUTO-RESOLUTION: If the resulting command uses npx, try to map it to a local binary first.
-    if (devCommand.startsWith('npx --yes ')) {
-        const parts = devCommand.replace('npx --yes ', '').split(' ');
-        const binName = parts[0];
-        const localBin = await this.resolveBin(binName, binName);
-        if (localBin.startsWith('/repo')) {
-            devCommand = localBin + ' ' + parts.slice(1).join(' ');
-        }
     }
 
     this.onStatusChange(`Running: ${devCommand}...`);
@@ -568,41 +762,50 @@ export class WebContainerGitService {
               const detectedPort = parseInt(portMatch[1]);
               if (detectedPort !== 3001 && detectedPort !== this.activeDriver?.server.port) {
                   this.onLog(`[Inference] Detected dev server on custom port: ${detectedPort}. Updating proxy...`);
-                  this.startMiddleware(detectedPort); // Restart middleware with new port
+                  this.startMiddleware(detectedPort);
+              }
+          }
+
+          // BASE PATH SNIFFER: Astro logs "┃ Local    http://localhost:PORT/base-path" (no colon!)
+          const basePathMatch = data.match(/Local\s+https?:\/\/localhost:\d+(\/[^\s\n]+)/i);
+          if (basePathMatch && basePathMatch[1] && basePathMatch[1] !== '/') {
+              const newBasePath = basePathMatch[1];
+              if (this._detectedBasePath !== newBasePath) {
+                  this._detectedBasePath = newBasePath;
+                  this.onLog(`[Inference] Detected base path: ${this._detectedBasePath}. Updating proxy...`);
+                  // Fast-restart middleware with new base path (skips kill-port for speed)
+                  this._fastRestartMiddleware(this._lastMiddlewarePort || 4321, this._detectedBasePath);
               }
           }
 
           // SEMANTIC LOG MONITORING: Detect 'Ready' string
           if (!this.semanticReady && this.readyPatterns.some(p => p.test(data))) {
-              this.onLog('[Ready] Detected framework ready signal! Initializing preview...');
+              this.onLog('[Ready] Detected framework ready signal!');
               this.semanticReady = true;
-              // Brief stabilization delay
-              setTimeout(() => {
-                if (this.serverUrl) this.onServerReady(this.serverUrl);
-              }, 2500);
+              this.onStatusChange('Server Ready!');
           }
       }
     }));
 
     this.middlewareStarted = false;
     
-    // Return a promise that resolves when the server-ready event for port 3001 fires
+    // Return a promise that resolves when the dev server is fully booted
+    // We wait for BOTH the proxy URL and the semantic signal before allowing boot() to continue
+    // (This prevents heavy fs.readdir scans from running concurrently with framework compilation)
     return new Promise((resolve) => {
       const check = setInterval(() => {
-        // Resolve only when BOTH port is ready AND semantic signal is found (or safety timeout)
         if (this.serverUrl && this.semanticReady) {
           clearInterval(check);
           resolve(this.serverProcess);
         }
       }, 500);
       
-      // Safety timeout for the await (60s) - Resolve anyway to prevent permanent hang
+      // Safety timeout for the await (60s)
       setTimeout(() => {
         clearInterval(check);
         if (!this.semanticReady) {
-            this.onLog('[Warning] Semantic ready signal not found. Resolving on port-only basis.');
+            this.onLog('[Warning] Semantic ready signal not found. Resolving anyway.');
             this.semanticReady = true;
-            if (this.serverUrl) this.onServerReady(this.serverUrl);
         }
         resolve(this.serverProcess);
       }, 60000);
@@ -746,19 +949,24 @@ export class WebContainerGitService {
     // This part requires a recursive read from WebContainer and write back to lightning-fs
     // Avoiding node_modules is critical here.
     const processEntry = async (path) => {
-      const entries = await this.webcontainerInstance.fs.readdir(path, { withFileTypes: true });
-      for (const entry of entries) {
-        // IGNORE CMS INTERNAL FILES AND TEMP FILES
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('zcms-')) continue;
-        const entryPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`;
+      const names = await this.webcontainerInstance.fs.readdir(path).catch(() => []);
+      for (const name of names) {
+        if (name === 'node_modules' || name === '.git' || name.startsWith('zcms-')) continue;
+        const entryPath = path === '/' ? `/${name}` : `${path}/${name}`;
         
-        if (entry.isDirectory()) {
-          await this.fs.mkdir(`${this.dir}${entryPath}`).catch(() => {});
-          await processEntry(entryPath);
-        } else {
-          const content = await this.webcontainerInstance.fs.readFile(entryPath);
-          await this.fs.writeFile(`${this.dir}${entryPath}`, content);
-        }
+        try {
+            const isDir = await this.webcontainerInstance.fs.readdir(entryPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (isDir) {
+                await this.fs.mkdir(`${this.dir}${entryPath}`).catch(() => {});
+                await processEntry(entryPath);
+            } else {
+                const content = await this.webcontainerInstance.fs.readFile(entryPath);
+                await this.fs.writeFile(`${this.dir}${entryPath}`, content);
+            }
+        } catch (e) {}
       }
     };
     await processEntry('/');
@@ -882,49 +1090,55 @@ export class WebContainerGitService {
     
     const findAndReplace = async (dir) => {
       let dirEntries = [];
-      try { dirEntries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true }); }
+      try { dirEntries = await this.webcontainerInstance.fs.readdir(dir); }
       catch (e) { return false; }
 
-      for (const entry of dirEntries) {
-        const fullPath = dir === '/' ? `/${entry.name}` : `${dir}/${entry.name}`;
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('zcms-') || entry.name === 'public' || entry.name === 'dist' || entry.name === '.astro') continue;
+      for (const name of dirEntries) {
+        const fullPath = dir === '/' ? `/${name}` : `${dir}/${name}`;
+        if (name === 'node_modules' || name === '.git' || name.startsWith('zcms-') || name === 'public' || name === 'dist' || name === '.astro') continue;
 
-        if (entry.isDirectory()) {
-          if (await findAndReplace(fullPath)) return true;
-        } else {
-          const exts = ['.md', '.mdx', '.html', '.ejs', '.hbs', '.njk', '.astro', '.vue', '.json', '.yml', '.yaml', '.js', '.ts', '.jsx', '.tsx', '.toml'];
-          if (exts.some(ext => entry.name.endsWith(ext))) {
-            try {
-              let content = await this.webcontainerInstance.fs.readFile(fullPath, 'utf8');
-              const matchStr = findMatch(content, original);
-              if (matchStr !== null) {
-                if (fullPath.endsWith('.json')) {
+        try {
+            const isDir = await this.webcontainerInstance.fs.readdir(fullPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (isDir) {
+                if (await findAndReplace(fullPath)) return true;
+            } else {
+                const exts = ['.md', '.mdx', '.html', '.ejs', '.hbs', '.njk', '.astro', '.vue', '.json', '.yml', '.yaml', '.js', '.ts', '.jsx', '.tsx', '.toml'];
+                if (exts.some(ext => name.endsWith(ext))) {
                     try {
-                        const data = JSON.parse(content);
-                        const updateValue = (obj) => {
-                            let count = 0;
-                            for (const key in obj) {
-                                if (typeof obj[key] === 'string' && obj[key] === original) {
-                                    obj[key] = updated; count++;
-                                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                                    count += updateValue(obj[key]);
+                      let content = await this.webcontainerInstance.fs.readFile(fullPath, 'utf8');
+                      const matchStr = findMatch(content, original);
+                      if (matchStr !== null) {
+                        if (fullPath.endsWith('.json')) {
+                            try {
+                                const data = JSON.parse(content);
+                                const updateValue = (obj) => {
+                                    let count = 0;
+                                    for (const key in obj) {
+                                        if (typeof obj[key] === 'string' && obj[key] === original) {
+                                            obj[key] = updated; count++;
+                                        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                                            count += updateValue(obj[key]);
+                                        }
+                                    }
+                                    return count;
+                                };
+                                if (updateValue(data) > 0) {
+                                    await writeAndTrack(fullPath, JSON.stringify(data, null, 2));
+                                    return true;
                                 }
-                            }
-                            return count;
-                        };
-                        if (updateValue(data) > 0) {
-                            await writeAndTrack(fullPath, JSON.stringify(data, null, 2));
-                            return true;
+                            } catch (e) {}
                         }
+                        content = content.split(matchStr).join(updated);
+                        await writeAndTrack(fullPath, content);
+                        return { path: fullPath, content: content };
+                      }
                     } catch (e) {}
                 }
-                content = content.split(matchStr).join(updated);
-                await writeAndTrack(fullPath, content);
-                return { path: fullPath, content: content };
-              }
-            } catch (e) {}
-          }
-        }
+            }
+        } catch (e) {}
       }
       return false;
     };
@@ -942,6 +1156,19 @@ export class WebContainerGitService {
    * Automatically detect collections based on markdown/html files
    */
   async scanCollections() {
+    // GUARD: Do not run if the WASM filesystem is busy (e.g. Astro is compiling)
+    if (this._fsBusy) {
+      this.onLog('[Discovery] Skipping scan - filesystem busy.');
+      return this.collections || [];
+    }
+    this._fsBusy = true;
+    try {
+
+    this.onLog('[Discovery] Starting content scan in /repo...');
+    // DIAGNOSTIC: List root of repo
+    const rootFiles = await this.webcontainerInstance.fs.readdir('/repo').catch(() => []);
+    this.onLog(`[Discovery] Files in /repo: ${rootFiles.join(', ')}`);
+
     this.collections = [];
     const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'public', '.astro', '.next', 'assets', 'images', 'components', 'layouts'];
     const validExtensions = ['.md', '.mdx', '.html', '.njk', '.11ty.js'];
@@ -949,23 +1176,29 @@ export class WebContainerGitService {
     const readDirRecursive = async (currentPath, maxDepth = 4, currentDepth = 0) => {
       if (currentDepth > maxDepth) return;
       try {
-        const entries = await this.webcontainerInstance.fs.readdir(currentPath, { withFileTypes: true });
-        
+        const names = await this.webcontainerInstance.fs.readdir(currentPath).catch(() => []);
+        if (names.length === 0) return;
+
         let fileCount = 0;
         let lastValidFile = null;
         let hasNonIndexFile = false;
 
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            if (!ignoreDirs.includes(entry.name) && !entry.name.startsWith('.')) {
-              await readDirRecursive(currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`, maxDepth, currentDepth + 1);
+        for (const name of names) {
+          const fullPath = currentPath === '/' ? `/${name}` : `${currentPath}/${name}`;
+          const isDir = await this.webcontainerInstance.fs.readdir(fullPath)
+              .then(() => true)
+              .catch(() => false);
+
+          if (isDir) {
+            if (!ignoreDirs.includes(name) && !name.startsWith('.')) {
+              await readDirRecursive(fullPath, maxDepth, currentDepth + 1);
             }
-          } else if (entry.isFile()) {
-            const ext = entry.name.substring(entry.name.lastIndexOf('.'));
-            const lowerName = entry.name.toLowerCase();
+          } else {
+            const ext = name.substring(name.lastIndexOf('.'));
+            const lowerName = name.toLowerCase();
             if (validExtensions.includes(ext) && lowerName !== 'readme.md') {
               fileCount++;
-              lastValidFile = entry.name;
+              lastValidFile = name;
               if (!lowerName.startsWith('index.') && !lowerName.startsWith('404.')) {
                 hasNonIndexFile = true;
               }
@@ -998,14 +1231,31 @@ export class WebContainerGitService {
       }
     }
     
-    // Common paths fallback
-    try { await readDirRecursive('/src/content', 2); } catch(e){}
-    try { await readDirRecursive('/src/pages', 3); } catch(e){}
-    try { await readDirRecursive('/content', 2); } catch(e){}
+    // Common paths fallback - Always prefix with /repo
+    // First try to list /repo/src to discover real subdirectories
+    const srcContents = await this.webcontainerInstance.fs.readdir('/repo/src').catch(() => []);
+    if (srcContents.length > 0) {
+      this.onLog(`[Discovery] Found /repo/src with: ${srcContents.join(', ')}`);
+      for (const subdir of srcContents) {
+        if (!ignoreDirs.includes(subdir) && !subdir.startsWith('.')) {
+          const fullPath = `/repo/src/${subdir}`;
+          // SEQUENTIAL: Small delay between scans to avoid concurrent WASM FS access
+          await new Promise(r => setTimeout(r, 50));
+          try { await readDirRecursive(fullPath, 3); } catch(e){}
+        }
+      }
+    }
+    await new Promise(r => setTimeout(r, 50));
+    try { await readDirRecursive('/repo/src/content', 2); } catch(e){}
+    await new Promise(r => setTimeout(r, 50));
+    try { await readDirRecursive('/repo/src/pages', 3); } catch(e){}
+    await new Promise(r => setTimeout(r, 50));
+    try { await readDirRecursive('/repo/content', 2); } catch(e){}
     
-    // If nothing found, wider scan
+    // If nothing found, wider scan from repo root
     if (this.collections.length === 0) {
-      await readDirRecursive('/', 3);
+      await new Promise(r => setTimeout(r, 100));
+      await readDirRecursive('/repo', 3);
     }
     
     // Deduplicate array of objects based on 'path'
@@ -1020,6 +1270,10 @@ export class WebContainerGitService {
 
     this.onLog(`[Discovery] Found ${this.collections.length} potential content collections.`);
     return this.collections;
+
+    } finally {
+      this._fsBusy = false;
+    }
   }
 
   async createNewItem(collectionPath, title, templateFile) {
@@ -1129,30 +1383,34 @@ export class WebContainerGitService {
    * QUANTUM BOOT: Save/Load binary snapshots of node_modules
    */
   async saveSnapshot() {
-    this.onLog('[Quantum] Creating node_modules snapshot...');
+    if (!this.repoUrl) return;
+    const repoSlug = this.repoUrl.split('/').pop().replace('.git', '');
+    this.onLog(`[Quantum] Creating snapshot for ${repoSlug}...`);
     try {
-      // Create a tarball inside the WebContainer
-      await this.webcontainerInstance.spawn('tar', ['-cf', '/tmp/modules.tar', 'node_modules']);
+      await this.webcontainerInstance.spawn('tar', ['-cf', '/tmp/modules.tar', 'node_modules'], { cwd: 'repo' });
       const tarData = await this.webcontainerInstance.fs.readFile('/tmp/modules.tar');
       
-      // Save the binary blob to lightning-fs
-      await this.fs.writeFile(`${this.dir}/__qcms_snapshot__.tar`, tarData);
-      this.onLog('[Quantum] Snapshot saved successfully.');
+      await this.fs.mkdir('/snapshots').catch(() => {});
+      await this.fs.writeFile(`/snapshots/${repoSlug}.tar`, tarData);
+      this.onLog('[Quantum] Snapshot cached successfully.');
     } catch (e) {
       this.onLog(`[Warning] Snapshot failed: ${e.message}`);
     }
   }
 
   async loadSnapshot() {
+    if (!this.repoUrl) return;
+    const repoSlug = this.repoUrl.split('/').pop().replace('.git', '');
     try {
-      const tarData = await this.fs.readFile(`${this.dir}/__qcms_snapshot__.tar`).catch(() => null);
+      const tarData = await this.fs.readFile(`/snapshots/${repoSlug}.tar`).catch(() => null);
       if (!tarData) return;
 
-      this.onLog('[Quantum] Restoring node_modules snapshot...');
+      this.onLog(`[Quantum] Restoring ${repoSlug} from cache...`);
       await this.webcontainerInstance.fs.writeFile('/tmp/modules.tar', tarData);
-      const untar = await this.webcontainerInstance.spawn('tar', ['-xf', '/tmp/modules.tar', '-C', '/']);
-      await untar.exit;
-      this.onLog('[Quantum] Snapshot restored.');
+      const untar = await this.webcontainerInstance.spawn('tar', ['-xf', '/tmp/modules.tar', '-C', '/repo']);
+      const code = await untar.exit;
+      if (code === 0) this.onLog('[Quantum] Restore complete.');
+      else this.onLog('[Quantum] Restore failed (tar exit ' + code + ')');
     } catch (e) {
       this.onLog(`[Warning] Load snapshot failed: ${e.message}`);
     }
@@ -1162,12 +1420,18 @@ export class WebContainerGitService {
    * QUANTUM BOOT: Cache build results for instant preview
    */
   async syncBuildCache() {
+    // GUARD: Don't run if WASM FS is busy or already syncing
+    if (this._fsBusy || this._syncingCache) return;
+    this._syncingCache = true;
+    this._fsBusy = true;
+    try {
     const buildDirs = ['public', 'dist', '_site', 'out', 'build'];
     let detectedDir = null;
     
     for (const d of buildDirs) {
       const exists = await this.webcontainerInstance.fs.readdir(`/${d}`).then(() => true).catch(() => false);
       if (exists) { detectedDir = d; break; }
+      await new Promise(r => setTimeout(r, 20)); // small delay between checks
     }
 
     if (!detectedDir) return;
@@ -1183,20 +1447,27 @@ export class WebContainerGitService {
     };
     
     const syncDirRecursive = async (path) => {
-      const entries = await this.webcontainerInstance.fs.readdir(path, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`;
+      const names = await this.webcontainerInstance.fs.readdir(path).catch(() => []);
+      for (const name of names) {
+        const fullPath = path === '/' ? `/${name}` : `${path}/${name}`;
         const cachePath = `/__qcms_cache__${fullPath}`;
-        if (entry.isDirectory()) {
-          await ensureDir(cachePath);
-          await syncDirRecursive(fullPath);
-        } else {
-          // Ensure parent directory exists before writing file
-          const parentDir = cachePath.substring(0, cachePath.lastIndexOf('/'));
-          await ensureDir(parentDir);
-          const content = await this.webcontainerInstance.fs.readFile(fullPath);
-          await this.fs.writeFile(cachePath, content);
-        }
+        
+        try {
+            const isDir = await this.webcontainerInstance.fs.readdir(fullPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (isDir) {
+                await ensureDir(cachePath);
+                await syncDirRecursive(fullPath);
+            } else {
+                // Ensure parent directory exists before writing file
+                const parentDir = cachePath.substring(0, cachePath.lastIndexOf('/'));
+                await ensureDir(parentDir);
+                const content = await this.webcontainerInstance.fs.readFile(fullPath);
+                await this.fs.writeFile(cachePath, content);
+            }
+        } catch (e) {}
       }
     };
     
@@ -1205,18 +1476,24 @@ export class WebContainerGitService {
     
     // Also trigger snapshot of modules while we're at it
     this.saveSnapshot();
+    } catch(e) {
+      this.onLog(`[Warning] syncBuildCache failed: ${e.message}`);
+    } finally {
+      this._fsBusy = false;
+      this._syncingCache = false;
+    }
   }
 
   async wipeWebContainerFS() {
     this.onLog('[Service] Wiping WebContainer filesystem...');
     try {
-      const entries = await this.webcontainerInstance.fs.readdir('/', { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.name === 'tmp') continue; // Keep tmp if it exists
+      const entries = await this.webcontainerInstance.fs.readdir('/').catch(() => []);
+      for (const name of entries) {
+        if (name === 'tmp') continue; 
         try {
-          await this.webcontainerInstance.fs.rm(entry.name, { recursive: true });
+          await this.webcontainerInstance.fs.rm(name, { recursive: true });
         } catch (e) {
-          this.onLog(`[Warning] Could not remove ${entry.name}: ${e.message}`);
+          this.onLog(`[Warning] Could not remove ${name}: ${e.message}`);
         }
       }
     } catch (e) {
@@ -1228,27 +1505,36 @@ export class WebContainerGitService {
     if (!this.webcontainerInstance) return [];
     try {
       const results = [];
-      const entries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true });
+      // Use simple readdir to avoid 'dirent' panics in WASM
+      const entries = await this.webcontainerInstance.fs.readdir(dir).catch(() => []);
       
-      // Determine category (Parent folder name)
       const relativePath = dir.replace(baseDir, '').replace(/^\/+/, '');
       const category = relativePath.split('/')[0] || 'General';
       const formattedCategory = category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, ' ');
 
-      for (const entry of entries) {
-        const fullPath = `${dir}/${entry.name}`;
-        if (entry.isDirectory()) {
-          const sub = await this.listComponents(fullPath, baseDir);
-          results.push(...sub);
-        } else if (entry.name.endsWith('.html')) {
-          const content = await this.webcontainerInstance.fs.readFile(fullPath, 'utf-8');
-          results.push({
-            name: entry.name.replace('.html', '').replace(/_/g, ' '),
-            category: formattedCategory,
-            filename: entry.name,
-            path: fullPath,
-            html: content
-          });
+      for (const name of entries) {
+        const fullPath = `${dir}/${name}`;
+        try {
+          // Check if it's a directory by trying readdir on it (stat-less check)
+          const isDir = await this.webcontainerInstance.fs.readdir(fullPath)
+              .then(() => true)
+              .catch(() => false);
+
+          if (isDir) {
+            const sub = await this.listComponents(fullPath, baseDir);
+            results.push(...sub);
+          } else if (name.endsWith('.html')) {
+            const content = await this.webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+            results.push({
+              name: name.replace('.html', '').replace(/_/g, ' '),
+              category: formattedCategory,
+              filename: name,
+              path: fullPath,
+              html: content
+            });
+          }
+        } catch (e) {
+          continue; // Skip individual file errors
         }
       }
       return results;
@@ -1264,23 +1550,28 @@ export class WebContainerGitService {
     if (!this.webcontainerInstance) return [];
     try {
       const results = [];
-      const entries = await this.webcontainerInstance.fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+      const entries = await this.webcontainerInstance.fs.readdir(dir).catch(() => []);
       
-      for (const entry of entries) {
-        const fullPath = `${dir}/${entry.name}`;
-        if (entry.isDirectory()) {
-            const sub = await this.listAssets(fullPath);
-            results.push(...sub);
-        } else if (entry.name.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/i)) {
-            // Get relative path for usage (e.g. /images/logo.png)
-            const publicPath = fullPath.replace('/repo/public', '') || '/';
-            results.push({
-                name: entry.name,
-                path: fullPath,
-                url: publicPath,
-                type: entry.name.split('.').pop().toLowerCase()
-            });
-        }
+      for (const name of entries) {
+        const fullPath = `${dir}/${name}`;
+        try {
+            const isDir = await this.webcontainerInstance.fs.readdir(fullPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (isDir) {
+                const sub = await this.listAssets(fullPath);
+                results.push(...sub);
+            } else if (name.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/i)) {
+                const publicPath = fullPath.replace('/repo/public', '') || '/';
+                results.push({
+                    name: name,
+                    path: fullPath,
+                    url: publicPath,
+                    type: name.split('.').pop().toLowerCase()
+                });
+            }
+        } catch (e) { continue; }
       }
       return results;
     } catch (e) {

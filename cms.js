@@ -1,8 +1,5 @@
-/**
- * 0cms Bridge (cms.js)
- * The invisible agent injected into the preview frame to enable
- * visual editing and deterministic source mapping.
- */
+import { Idiomorph } from './lib/vendor/idiomorph.js';
+
 class ZeroCMS {
   constructor() {
     this.active = false;
@@ -43,6 +40,7 @@ class ZeroCMS {
         if (e.data.type === 'CMS_EXTRACT_MODE') this.toggleExtractMode(e.data.enabled);
         if (e.data.type === 'CMS_EXTRACT_TRIGGER') this.captureComponent(e.data.name);
         if (e.data.type === 'CMS_ENTER_INSERT_MODE') this.toggleInsertMode(true, e.data.html);
+        if (e.data.type === 'CMS_SYNC_FRAG') this.syncFragment(e.data.html, e.data.markerId);
       });
       window.parent.postMessage({ type: 'CMS_READY' }, '*');
     }
@@ -380,57 +378,61 @@ class ZeroCMS {
     }
   }
 
-  captureComponent(name) {
-    if (!this.extractMode) return;
-    
-    // Find the current hover or highest-level focused element
+  captureComponent(name = 'New Component') {
     const el = document.querySelector('.cms-extract-hover');
-    if (!el) {
-        alert('Please hover over an element to extract.');
-        return;
+    if (el) {
+        window.parent.postMessage({
+            type: 'CMS_COMPONENT_CAPTURED',
+            name: name,
+            html: el.outerHTML
+        }, '*');
+    }
+    this.toggleExtractMode(false);
+  }
+
+
+  /**
+   * Paradox-Free In-Frame Sync
+   * Morphs the local DOM using the provided HTML fragment.
+   */
+  async syncFragment(html, markerId = null) {
+    console.log(`[Bridge] Syncing fragment (Marker: ${markerId || 'Whole Body'})`);
+    const parser = new DOMParser();
+    const newDoc = parser.parseFromString(html, 'text/html');
+
+    if (markerId) {
+        const targetInOld = this.findElementByMarker(document.body, markerId);
+        const targetInNew = this.findElementByMarker(newDoc.body, markerId);
+
+        if (targetInOld && targetInNew) {
+            Idiomorph.morph(targetInOld, targetInNew);
+            this.updateMetadata(newDoc);
+            return;
+        }
+        console.warn(`[Bridge] Marker ${markerId} not found. Falling back to body morph.`);
     }
 
-    // 1. CLONE AND CLEAN
-    const clone = el.cloneNode(true);
+    Idiomorph.morph(document.body, newDoc.body);
+    this.updateMetadata(newDoc);
     
-    // Remove all CMS-specific markers and logic
-    const clean = (target) => {
-        target.classList.remove('cms-editable', 'cms-modified', 'cms-highlight', 'cms-identified', 'cms-extract-hover');
-        delete target.dataset.cmsOriginal;
-        
-        // Strip invisible breadcrumbs from all text nodes in the clone
-        const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
-        let node;
-        const START = '\uFEFF'; 
-        const ZERO = '\u200B';
-        const ONE = '\u200C';
-        const SEP = '\u200D';
-        const END = '\uFEFF';
-        const regex = new RegExp(`[${START}${ZERO}${ONE}${SEP}${END}]`, 'g');
+    // Refresh editable state
+    if (this.active) this.scanAndApply();
+  }
 
-        while (node = walker.nextNode()) {
-            node.nodeValue = node.nodeValue.replace(regex, '');
-        }
+  findElementByMarker(root, markerId) {
+    const markerString = `\u200B\u200C${markerId}\u200C`;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.nodeValue.includes(markerString)) return node.parentElement;
+    }
+    return null;
+  }
 
-        // Recursive clean for children
-        for (const child of target.children) {
-            clean(child);
-        }
-    };
-
-    clean(clone);
-
-    // 2. BROADCAST TO DASHBOARD
-    const html = clone.outerHTML;
-    const componentName = name || `component_${Math.random().toString(36).substr(2, 9)}`;
-    
-    window.parent.postMessage({
-      type: 'CMS_COMPONENT_CAPTURED',
-      name: componentName,
-      html: html
-    }, '*');
-
-    this.toggleExtractMode(false);
+  updateMetadata(newDoc) {
+    if (document.title !== newDoc.title) {
+        document.title = newDoc.title;
+    }
   }
 
   highlight(selector) {

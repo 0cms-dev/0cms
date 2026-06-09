@@ -6,11 +6,12 @@ const APP_ID = process.env.GITHUB_APP_ID;
 
 // Normalize Private Key: handle both real newlines and escaped \n
 let PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY;
-if (PRIVATE_KEY && PRIVATE_KEY.includes('\\n')) {
-  PRIVATE_KEY = PRIVATE_KEY.replace(/\\n/g, '\n');
-}
-if (PRIVATE_KEY && PRIVATE_KEY.startsWith('"') && PRIVATE_KEY.endsWith('"')) {
-  PRIVATE_KEY = PRIVATE_KEY.slice(1, -1);
+if (PRIVATE_KEY) {
+  PRIVATE_KEY = PRIVATE_KEY.trim();
+  if (PRIVATE_KEY.startsWith('"') && PRIVATE_KEY.endsWith('"')) {
+    PRIVATE_KEY = PRIVATE_KEY.slice(1, -1).trim();
+  }
+  PRIVATE_KEY = PRIVATE_KEY.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
 }
 const http = require('http');
 const https = require('https');
@@ -26,19 +27,32 @@ function base64Url(str) {
 
 function generateAppJWT() {
   if (!APP_ID || !PRIVATE_KEY) return null;
-  const header = JSON.stringify({ alg: 'RS256', typ: 'JWT' });
-  const now = Math.floor(Date.now() / 1000);
-  const payload = JSON.stringify({
-    iat: now - 60,
-    exp: now + (10 * 60),
-    iss: APP_ID
-  });
-  
-  const unsignedToken = `${base64Url(header)}.${base64Url(payload)}`;
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(unsignedToken);
-  const signature = signer.sign(PRIVATE_KEY, 'base64');
-  return `${unsignedToken}.${signature.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')}`;
+
+  try {
+    const appIdInt = parseInt(APP_ID, 10);
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Header & Payload
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iat: now - 120, // 2 minutes in the past to be safe against clock drift
+      exp: now + 300, // 5 minutes in the future
+      iss: appIdInt
+    };
+
+    const tokenHeader = base64Url(JSON.stringify(header));
+    const tokenPayload = base64Url(JSON.stringify(payload));
+    const unsignedToken = `${tokenHeader}.${tokenPayload}`;
+    
+    // Sign with RS256
+    const signature = crypto.sign("RSA-SHA256", Buffer.from(unsignedToken), PRIVATE_KEY);
+    const encodedSignature = signature.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    
+    return `${unsignedToken}.${encodedSignature}`;
+  } catch (err) {
+    console.error(`[JWT Error] ${err.message}`);
+    return null;
+  }
 }
 
 const MIME_TYPES = {
@@ -84,12 +98,14 @@ const server = http.createServer((req, res) => {
 
     // GitHub Login Redirect
     if (req.url.startsWith('/github/login')) {
-      if (CLIENT_ID === 'YOUR_CLIENT_ID') {
+      if (!CLIENT_ID || CLIENT_ID === 'YOUR_CLIENT_ID') {
+        console.error('[Auth] GITHUB_CLIENT_ID is missing or not configured.');
         res.writeHead(500);
-        res.end('Error: GITHUB_CLIENT_ID not configured in serve.js or environment.');
+        res.end('Error: GITHUB_CLIENT_ID not configured. Please check your .env file.');
         return;
       }
-      const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&scope=repo,user`;
+      console.log(`[Auth] Redirecting user to GitHub for authorization (Client: ${CLIENT_ID})...`);
+      const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&scope=repo,user,admin:repo_hook`;
       res.writeHead(302, { Location: githubAuthUrl });
       res.end();
       return;
@@ -202,8 +218,19 @@ const server = http.createServer((req, res) => {
       
       // Special handling for App-Level tokens
       let authHeader = req.headers['authorization'];
-      if ((apiPath === 'app' || apiPath.includes('/access_tokens')) && APP_ID && PRIVATE_KEY) {
-         authHeader = `Bearer ${generateAppJWT()}`;
+      const isAppRequest = apiPath === 'app' || apiPath.includes('/access_tokens');
+
+      if (isAppRequest) {
+        if (!APP_ID || !PRIVATE_KEY) {
+          console.log(`\x1b[33m[Proxy] Blocked App-level request to ${apiPath} (Missing GITHUB_APP_ID/PRIVATE_KEY)\x1b[0m`);
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            error: 'Missing Configuration', 
+            message: 'GITHUB_APP_ID or GITHUB_PRIVATE_KEY not found in .env. Organization support requires a GitHub App.' 
+          }));
+          return;
+        }
+        authHeader = `Bearer ${generateAppJWT()}`;
       }
 
       const options = {
@@ -221,16 +248,36 @@ const server = http.createServer((req, res) => {
       options.headers['User-Agent'] = 'ZeroCMS-App';
       options.headers['Accept'] = 'application/vnd.github.v3+json';
 
+      console.log(`[Proxy] Forwarding to GitHub API: ${apiPath} (Auth: ${authHeader ? 'Present' : 'Missing'})`);
+      if (isAppRequest) {
+        console.log(`\x1b[36m[Proxy] App-Level Context - App ID: ${APP_ID}\x1b[0m`);
+      }
+
       const apiReq = https.request(options, (apiRes) => {
+        let responseBody = '';
+        console.log(`[Proxy] GitHub API Response: ${apiRes.statusCode} for ${apiPath}`);
+        
         res.writeHead(apiRes.statusCode, {
           ...apiRes.headers,
           'Access-Control-Allow-Origin': '*',
           'Cross-Origin-Resource-Policy': 'cross-origin'
         });
-        apiRes.pipe(res);
+
+        apiRes.on('data', (chunk) => {
+          responseBody += chunk;
+          res.write(chunk);
+        });
+
+        apiRes.on('end', () => {
+          if (apiRes.statusCode >= 400) {
+            console.log(`\x1b[31m[Proxy] Error Body: ${responseBody}\x1b[0m`);
+          }
+          res.end();
+        });
       });
 
       apiReq.on('error', (e) => {
+        console.error(`[Proxy] Error for ${apiPath}:`, e.message);
         res.writeHead(500);
         res.end('API Proxy Error: ' + e.message);
       });
