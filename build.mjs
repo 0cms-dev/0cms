@@ -21,7 +21,7 @@ async function build() {
     minify: true,
     sourcemap: "external",
     target: "browser",
-    external: ["/lib/*"], 
+    external: ["/lib/*", "*/zerocms_tagger.js", "*/zerocms_tagger_bg.wasm"],
   });
 
   if (!result.success) {
